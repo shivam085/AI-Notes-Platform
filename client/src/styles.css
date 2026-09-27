@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #f7f7f0;
+  --color-ink: #253d32;
+  --color-muted: #657269;
+  --color-forest: #28513e;
+  --color-forest-dark: #193b2b;
+  --color-sage: #edf1e6;
+  --color-line: #dce2d6;
+  --font-sans: "Segoe UI", system-ui, sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
+}
+
+html { scroll-behavior: smooth; }
+body { margin: 0; min-width: 320px; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid #647f24; outline-offset: 5px; }
+::selection { background: #dce7bd; color: #193b2b; }
+
+.skip-link {
+  position: fixed; top: -100px; left: 16px; z-index: 50;
+  padding: 12px 20px; border-radius: 8px; background: #28513e; color: white;
+}
+
+.skip-link:focus { top: 16px; }
+.step-number {
+  display: flex; width: 32px; height: 32px; flex-shrink: 0;
+  align-items: center; justify-content: center; border-radius: 50%; font-size: 11px; font-weight: 600;
+}
+
+.status-panel {
+  display: flex; align-items: flex-start; gap: 12px;
+  min-height: 88px; padding: 18px; border-radius: 12px;
+  background: #f5f6f2; color: #536358;
+}
+
+.status-dot { width: 8px; height: 8px; flex-shrink: 0; margin-top: 6px; border-radius: 50%; background: currentColor; }
+.status-connected { background: #edf5e8; color: #28513e; }
+.status-checking { background: #f3f2e5; color: #6b6326; }
+.status-error { background: #fff0ed; color: #96392b; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
