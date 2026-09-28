@@ -86,7 +86,9 @@ Notes_ai/
       health.test.js          # Tests that make actual HTTP requests
 ```
 
-There is no `ai-service/` yet. We will create it when Python/FastAPI are introduced in Phase 4.
+## Phase 4: AI summarization
+
+The internal Python service now lives in `ai-service/`. It accepts a request only from Express, then calls Gemini to summarize an owned, saved note. Follow [docs/phase-4-setup.md](docs/phase-4-setup.md) to install Python, configure the two local `.env` files, and start FastAPI.
 
 ## API reference
 

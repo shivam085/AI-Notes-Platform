@@ -2,8 +2,9 @@ import express from 'express';
 import { createClerkConfiguration } from './config/clerk.js';
 import { createAuthRouter } from './routes/auth.js';
 import { createNotesRouter } from './routes/notes.js';
+import { createAiRouter } from './routes/ai.js';
 
-export function createApp({ clerkOptions = {}, configured = Boolean(process.env.CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY), noteModel, databaseConfigured = Boolean(process.env.MONGODB_URI) } = {}) {
+export function createApp({ clerkOptions = {}, configured = Boolean(process.env.CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY), noteModel, databaseConfigured = Boolean(process.env.MONGODB_URI), aiClient } = {}) {
   const app = express();
   const clerk = createClerkConfiguration({ clerkOptions, configured });
   app.disable('x-powered-by');
@@ -14,6 +15,8 @@ export function createApp({ clerkOptions = {}, configured = Boolean(process.env.
   app.use('/api/auth', clerk.requireConfiguration, clerk.middleware, createAuthRouter());
   app.use('/api/notes', clerk.requireConfiguration, clerk.middleware);
   app.use('/api/notes', createNotesRouter({ NoteModel: noteModel, databaseConfigured }));
+  app.use('/api/ai', clerk.requireConfiguration, clerk.middleware);
+  app.use('/api/ai', createAiRouter({ NoteModel: noteModel, databaseConfigured, aiClient }));
   app.use((req, res) => res.status(404).json({ message: 'This endpoint does not exist.' }));
   app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);
