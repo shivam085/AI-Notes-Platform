@@ -1,4 +1,5 @@
 import { app } from './app.js';
+import { connectDatabase } from './db.js';
 
 const host = '127.0.0.1';
 const port = Number(process.env.PORT || 5000);
@@ -7,9 +8,17 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error('PORT must be a whole number between 1 and 65535.');
 }
 
-const server = app.listen(port, host, () => {
-  console.log(`AI Notes API is running at http://${host}:${port}`);
-});
+let server;
+
+try {
+  await connectDatabase();
+  server = app.listen(port, host, () => {
+    console.log(`AI Notes API is running at http://${host}:${port}`);
+  });
+} catch (error) {
+  console.error('Could not connect to MongoDB. Check the server environment configuration and Atlas network access.');
+  process.exit(1);
+}
 
 server.on('error', (error) => {
   console.error(error.code === 'EADDRINUSE'

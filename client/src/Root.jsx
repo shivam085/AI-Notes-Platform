@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ClerkProvider, SignIn, SignUp, UserButton, useAuth } from '@clerk/react';
 import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 import ConnectionPage from './App.jsx';
+import NotesWorkspace from './NotesWorkspace.jsx';
 
 const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY?.trim();
 const button = 'inline-block rounded-xl bg-forest px-5 py-3 text-sm font-semibold text-white';
@@ -26,7 +27,7 @@ function Workspace() {
       setState({ status: 'success', userId: data.userId });
     } catch (error) { setState({ status: 'error', message: error.name === 'TimeoutError' ? 'The request timed out. Please try again.' : error.message }); }
   }
-  return <Layout><div className="flex items-center justify-between"><p className="text-sm text-muted">Your personal space</p><UserButton /></div><h1 className="mt-4 font-display text-4xl">Welcome to your workspace.</h1><p className="mt-4 text-muted">You are signed in. Notes arrive in Phase 3.</p><section className="mt-8 rounded-2xl border border-line bg-white p-7"><h2 className="text-xl font-semibold">Verify your account with the backend</h2><p className="mt-3 text-muted">Express independently checks your session before returning your account ID.</p><button className={`${button} mt-6 disabled:opacity-60`} onClick={verify} disabled={state.status === 'loading'}>{state.status === 'loading' ? 'Verifying…' : 'Verify my session'}</button><div role="status" className="mt-4 break-all">{state.status === 'success' && <p>Session verified. Account: {state.userId}</p>}{state.status === 'error' && <p>{state.message}</p>}</div></section></Layout>;
+  return <Layout><div className="flex items-center justify-between"><p className="text-sm text-muted">Your personal space</p><UserButton /></div><h1 className="mt-4 font-display text-4xl">Welcome to your workspace.</h1><p className="mt-4 text-muted">Create and manage private notes. Your account identity is checked by Express before notes are read or changed.</p><section className="mt-8 rounded-2xl border border-line bg-white p-7"><h2 className="text-xl font-semibold">Verify your account with the backend</h2><p className="mt-3 text-muted">Express independently checks your session before returning your account ID.</p><button className={`${button} mt-6 disabled:opacity-60`} onClick={verify} disabled={state.status === 'loading'}>{state.status === 'loading' ? 'Verifying…' : 'Verify my session'}</button><div role="status" className="mt-4 break-all">{state.status === 'success' && <p>Session verified. Account: {state.userId}</p>}{state.status === 'error' && <p>{state.message}</p>}</div></section><NotesWorkspace getToken={getToken} /></Layout>;
 }
 function ProtectedWorkspace() {
   const { isLoaded, isSignedIn, sessionId } = useAuth();

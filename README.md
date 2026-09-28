@@ -4,7 +4,7 @@ A personal knowledge-management app, built one small phase at a time.
 
 ## Current progress
 
-Phases 1 and 2 are complete. Clerk sign-in and the backend session check are verified. The root page opens the protected workspace after sign-in; the original connection check is at /connection. Phase 3 adds private notes.
+Phases 1–3 are complete. Clerk sign-in, the backend session check, MongoDB Atlas, and private notes are verified. The protected workspace now lets each signed-in user create, search, edit, organize, and delete their own notes. The original connection check remains at /connection.
 
 ## Phase 1: connect React to Express
 
@@ -16,7 +16,7 @@ Phase 2 adds Clerk sign-in. Notes, documents, and AI features will be added in l
 
 You need **Node.js 22.12 or newer** and npm. Development was started with Node 22.23.1 and npm 10.9.8. No database, API keys, or external accounts are required for Phase 1.
 
-Open a terminal **inside `C:\Users\ASUS\OneDrive\Desktop\Notes_ai`**, then run:
+Open a terminal **inside `D:\Projects\Notes_ai`**, then run:
 
 ```sh
 npm install
@@ -122,7 +122,7 @@ The frontend treats non-success responses, invalid JSON, an unexpected status, a
 - The API binds to `127.0.0.1:5000`; Vite binds to `127.0.0.1:5173`. These are local development services.
 - If a port is busy, stop the earlier instance you started. Vite deliberately reports a busy port instead of silently picking another one.
 - The API reads an optional `PORT` environment variable. If you change it, update the proxy target in `client/vite.config.js` too.
-- Phase 2 loads client/.env through Vite and server/.env through Node. See the per-application .env.example files.
+- Phase 2 loads client/.env through Vite and server/.env through Node. Phase 3 also requires MONGODB_URI in server/.env. See the per-application .env.example files; never commit real values.
 - When the backend is stopped, a Vite proxy connection error is expected. Restart Express and try the button again.
 - Keep future secrets out of React and Git. `.gitignore` excludes `.env` files, dependencies, and build output.
 
@@ -131,7 +131,7 @@ The frontend treats non-success responses, invalid JSON, an unexpected status, a
 - [Development Log](https://app.notion.com/p/3e8c1e94c8d181ffa4f0cb43a71caa0f)
 - [Architecture & Concepts](https://app.notion.com/p/3e8c1e94c8d181cda0b3cc006c35018b)
 
-Update the existing phase entry with actual work and checks. Preserve unchanged earlier phases. Clerk sign-in and its live session check are complete. The next phase is the private notes app.
+Update the existing phase entry with actual work and checks. Preserve unchanged earlier phases. Clerk sign-in and private notes are complete. The next phase is the first AI feature: summarization.
 
 ## Official setup references
 

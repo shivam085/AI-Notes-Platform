@@ -1,27 +1,19 @@
 import express from 'express';
-import { clerkMiddleware, getAuth } from '@clerk/express';
+import { createClerkConfiguration } from './config/clerk.js';
+import { createAuthRouter } from './routes/auth.js';
+import { createNotesRouter } from './routes/notes.js';
 
-export function createApp({ clerkOptions = {}, configured = Boolean(process.env.CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY) } = {}) {
+export function createApp({ clerkOptions = {}, configured = Boolean(process.env.CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY), noteModel, databaseConfigured = Boolean(process.env.MONGODB_URI) } = {}) {
   const app = express();
+  const clerk = createClerkConfiguration({ clerkOptions, configured });
   app.disable('x-powered-by');
+  app.use(express.json({ limit: '100kb' }));
   app.get('/api/health', (req, res) => res.set('Cache-Control', 'no-store').json({ status: 'ok' }));
 
   // Fail closed: missing keys never create a fake signed-in user.
-  app.use('/api/auth', (req, res, next) => {
-    res.set('Cache-Control', 'no-store');
-    if (!configured) return res.status(503).json({ message: 'Sign-in is not configured on the server yet.' });
-    next();
-  });
-  app.use('/api/auth', clerkMiddleware({
-    authorizedParties: (process.env.CLERK_AUTHORIZED_PARTIES || 'http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173').split(',').map(value => value.trim()).filter(Boolean),
-    ...clerkOptions,
-  }));
-  app.get('/api/auth/me', (req, res) => {
-    const { userId, sessionId } = getAuth(req);
-    if (!userId || !sessionId) return res.status(401).json({ message: 'Please sign in to continue.' });
-    // Identity comes from Clerk's verified token, never a query/body userId.
-    res.json({ userId });
-  });
+  app.use('/api/auth', clerk.requireConfiguration, clerk.middleware, createAuthRouter());
+  app.use('/api/notes', clerk.requireConfiguration, clerk.middleware);
+  app.use('/api/notes', createNotesRouter({ NoteModel: noteModel, databaseConfigured }));
   app.use((req, res) => res.status(404).json({ message: 'This endpoint does not exist.' }));
   app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);
