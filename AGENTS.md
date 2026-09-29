@@ -4,6 +4,10 @@
 
 This is the user's first AI/RAG project. Explain new concepts in simple language and build one phase at a time. The active plan is `docs/coding-implementation-plan.md`.
 
+## Consistent engineering conventions
+
+Before implementing a feature, review the existing codebase and follow its established conventions for folder structure, naming, formatting, error handling, API design, component organization, testing, and documentation. Keep code clean, modular, scalable, maintainable, and beginner-friendly. Reuse proven patterns from the user's other projects when they fit the current technology and requirements; do not introduce extra architecture or dependencies without a clear need.
+
 Finish V1 as a complete private notes/documents application with all six AI features, tests, deployment, and documentation. Note sharing, viewer/editor roles, Yjs, WebSockets, and live collaboration are optional V2 only. A later user decision is required to add V2. Do not add collaboration infrastructure to V1.
 
 ## Notion documentation authorized by the user

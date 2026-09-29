@@ -8,6 +8,7 @@ export async function connectDatabase(uri = process.env.MONGODB_URI) {
   }
 
   if (mongoose.connection.readyState === 1) return mongoose.connection;
+
   if (!connectionPromise) {
     connectionPromise = mongoose.connect(uri, {
       serverSelectionTimeoutMS: 8000,

@@ -1,5 +1,5 @@
 import { app } from './app.js';
-import { connectDatabase } from './db.js';
+import { connectDatabase } from './config/database.js';
 
 const host = '127.0.0.1';
 const port = Number(process.env.PORT || 5000);
