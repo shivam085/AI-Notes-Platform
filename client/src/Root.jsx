@@ -3,6 +3,7 @@ import { ClerkProvider, SignIn, SignUp, UserButton, useAuth } from '@clerk/react
 import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 import ConnectionPage from './App.jsx';
 import NotesWorkspace from './NotesWorkspace.jsx';
+import DocumentsWorkspace from './DocumentsWorkspace.jsx';
 
 const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY?.trim();
 const button = 'inline-block rounded-xl bg-forest px-5 py-3 text-sm font-semibold text-white';
@@ -96,7 +97,7 @@ function Workspace() {
 
       <h1 className="mt-4 font-display text-4xl">Welcome to your workspace.</h1>
       <p className="mt-4 text-muted">
-        Create and manage private notes. Your account identity is checked by Express before notes are read or changed.
+        Create private notes and store private PDFs. Your account identity is checked by Express before your data is read or changed.
       </p>
 
       <section className="mt-8 rounded-2xl border border-line bg-white p-7">
@@ -118,6 +119,7 @@ function Workspace() {
       </section>
 
       <NotesWorkspace getToken={getToken} />
+      <DocumentsWorkspace getToken={getToken} />
     </Layout>
   );
 }

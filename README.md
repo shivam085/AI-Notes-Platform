@@ -4,7 +4,7 @@ A personal knowledge-management app, built one small phase at a time.
 
 ## Current progress
 
-Phases 1–3 are complete. Clerk sign-in, the backend session check, MongoDB Atlas, and private notes are verified. The protected workspace now lets each signed-in user create, search, edit, organize, and delete their own notes. The original connection check remains at /connection.
+Phases 1–4 are complete. Clerk sign-in, the backend session check, MongoDB Atlas, private notes, and AI summarization are verified. Phase 5 is in progress: the code for private PDF uploads is ready for Cloudinary configuration and live verification. The protected workspace lets each signed-in user create, search, edit, organize, and delete their own notes. The original connection check remains at /connection.
 
 ## Phase 1: connect React to Express
 
@@ -90,6 +90,10 @@ Notes_ai/
 
 The internal Python service now lives in `ai-service/`. It accepts a request only from Express, then calls Gemini to summarize an owned, saved note. Follow [docs/phase-4-setup.md](docs/phase-4-setup.md) to install Python, configure the two local `.env` files, and start FastAPI.
 
+## Phase 5: private PDF uploads
+
+The document upload screen accepts PDFs up to 10 MB. Express verifies the signed-in user and validates the file before sending it to Cloudinary private storage. MongoDB stores the owner and file metadata; it does not store the original file. Follow [docs/phase-5-setup.md](docs/phase-5-setup.md) to add the three Cloudinary values to `server/.env` and perform the live check.
+
 ## API reference
 
 ### GET /api/health
@@ -124,7 +128,7 @@ The frontend treats non-success responses, invalid JSON, an unexpected status, a
 - The API binds to `127.0.0.1:5000`; Vite binds to `127.0.0.1:5173`. These are local development services.
 - If a port is busy, stop the earlier instance you started. Vite deliberately reports a busy port instead of silently picking another one.
 - The API reads an optional `PORT` environment variable. If you change it, update the proxy target in `client/vite.config.js` too.
-- Phase 2 loads client/.env through Vite and server/.env through Node. Phase 3 also requires MONGODB_URI in server/.env. See the per-application .env.example files; never commit real values.
+- Phase 2 loads client/.env through Vite and server/.env through Node. Phase 3 also requires MONGODB_URI in server/.env. Phase 5 requires CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in server/.env. See the per-application .env.example files; never commit real values.
 - When the backend is stopped, a Vite proxy connection error is expected. Restart Express and try the button again.
 - Keep future secrets out of React and Git. `.gitignore` excludes `.env` files, dependencies, and build output.
 
@@ -133,7 +137,7 @@ The frontend treats non-success responses, invalid JSON, an unexpected status, a
 - [Development Log](https://app.notion.com/p/3e8c1e94c8d181ffa4f0cb43a71caa0f)
 - [Architecture & Concepts](https://app.notion.com/p/3e8c1e94c8d181cda0b3cc006c35018b)
 
-Update the existing phase entry with actual work and checks. Preserve unchanged earlier phases. Clerk sign-in and private notes are complete. The next phase is the first AI feature: summarization.
+Update the existing phase entry with actual work and checks. Preserve unchanged earlier phases. Private PDF upload is the current phase; text extraction starts after it is verified.
 
 ## Official setup references
 
