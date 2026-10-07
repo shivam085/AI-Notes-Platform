@@ -35,6 +35,23 @@ function fakeDocumentModel() {
       if (document) records.splice(records.indexOf(document), 1);
       return query(document || null);
     },
+    findOneAndUpdate(filter, update) {
+      const document = matching(filter)[0];
+      if (document) Object.assign(document, update.$set);
+      return query(document || null);
+    },
+  };
+}
+
+function fakeKnowledgeChunkModel() {
+  const records = [];
+  const matching = (filter) => records.filter((chunk) => Object.entries(filter).every(([key, value]) => chunk[key] === value));
+  return {
+    records,
+    async deleteMany(filter) {
+      for (const chunk of matching(filter)) records.splice(records.indexOf(chunk), 1);
+    },
+    async insertMany(chunks) { records.push(...chunks); },
   };
 }
 
@@ -50,13 +67,15 @@ function fakeStorage() {
   };
 }
 
-async function request(t, path, options = {}, documentModel = fakeDocumentModel(), documentStorage = fakeStorage()) {
+async function request(t, path, options = {}, documentModel = fakeDocumentModel(), documentStorage = fakeStorage(), knowledgeChunkModel = fakeKnowledgeChunkModel(), documentExtractionClient) {
   const app = createApp({
     configured: true,
     databaseConfigured: true,
     cloudinaryConfigured: true,
     documentModel,
+    knowledgeChunkModel,
     documentStorage,
+    documentExtractionClient,
     clerkOptions: { secretKey: 'sk_test_not_a_real_key_for_offline_tests', publishableKey, jwtKey: publicKey.export({ type: 'spki', format: 'pem' }), authorizedParties: [origin] },
   });
   const server = await new Promise((resolve) => { const running = app.listen(0, '127.0.0.1', () => resolve(running)); });
@@ -101,4 +120,34 @@ test('an owner receives a short-lived access link and another account document i
   const { response: blocked } = await request(t, '/api/documents/507f191e810c19729de860ea/download', {}, documentModel, storage);
   assert.equal(blocked.status, 404);
   assert.equal(storage.removed.length, 0);
+});
+
+test('an owner can extract page-aware text and cannot process a ready document again', async (t) => {
+  const documentModel = fakeDocumentModel();
+  const storage = fakeStorage();
+  const chunkModel = fakeKnowledgeChunkModel();
+  const extractor = {
+    async extractPdf(url) {
+      assert.match(url, /^https:\/\/storage\.example\/owner-file-id/);
+      return {
+        pages: [{ pageNumber: 1, text: 'Indexes speed up repeated database lookups.' }],
+        chunks: [{ position: 0, pageNumber: 1, text: 'Indexes speed up repeated database lookups.' }],
+      };
+    },
+  };
+  const body = new FormData();
+  body.append('document', new Blob([Buffer.from('%PDF-1.7\nexample')], { type: 'application/pdf' }), 'revision.pdf');
+  await request(t, '/api/documents', { method: 'POST', body }, documentModel, storage, chunkModel, extractor);
+
+  const { response: processed } = await request(t, `/api/documents/${documentId}/process`, { method: 'POST' }, documentModel, storage, chunkModel, extractor);
+  assert.equal(processed.status, 200);
+  assert.equal((await processed.json()).document.processingStatus, 'ready');
+  assert.equal(chunkModel.records.length, 1);
+
+  const { response: text } = await request(t, `/api/documents/${documentId}/text`, {}, documentModel, storage, chunkModel, extractor);
+  assert.equal(text.status, 200);
+  assert.equal((await text.json()).document.pages[0].pageNumber, 1);
+
+  const { response: repeated } = await request(t, `/api/documents/${documentId}/retry`, { method: 'POST' }, documentModel, storage, chunkModel, extractor);
+  assert.equal(repeated.status, 409);
 });

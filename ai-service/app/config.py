@@ -12,6 +12,9 @@ class Settings:
     gemini_model: str
     ai_service_token: str | None
     max_summary_input_chars: int = 12_000
+    max_pdf_text_chars: int = 500_000
+    chunk_size_chars: int = 2_000
+    chunk_overlap_chars: int = 200
 
     @classmethod
     def from_environment(cls) -> "Settings":

@@ -3,6 +3,7 @@ import { Document } from '../models/Document.js';
 
 export class DocumentInputError extends Error {}
 export class DocumentNotFoundError extends Error {}
+export class DocumentProcessingStateError extends Error {}
 
 const maxDocumentBytes = 10 * 1024 * 1024;
 
@@ -49,8 +50,18 @@ export function serializeDocument(document) {
     folderId: document.folderId,
     tags: document.tags,
     processingStatus: document.processingStatus,
+    processingError: document.processingError || null,
+    chunkCount: document.extractedChunkCount || 0,
+    processedAt: document.processedAt || null,
     createdAt: document.createdAt,
     updatedAt: document.updatedAt,
+  };
+}
+
+export function serializeDocumentText(document) {
+  return {
+    ...serializeDocument(document),
+    pages: (document.extractedPages || []).map((page) => ({ pageNumber: page.pageNumber, text: page.text })),
   };
 }
 
@@ -79,6 +90,50 @@ export function createDocumentService(DocumentModel = Document) {
       requireValidId(id);
       const document = await DocumentModel.findOneAndDelete({ _id: id, ownerId }).lean();
       if (!document) throw new DocumentNotFoundError();
+      return document;
+    },
+    async beginProcessing(ownerId, id) {
+      const document = await this.getById(ownerId, id);
+      if (document.processingStatus === 'processing') {
+        throw new DocumentProcessingStateError('This document is already being processed. Please wait a moment.');
+      }
+      if (document.processingStatus === 'ready') {
+        throw new DocumentProcessingStateError('This document is already ready to read.');
+      }
+
+      return DocumentModel.findOneAndUpdate(
+        { _id: id, ownerId },
+        { $set: { processingStatus: 'processing', processingError: null } },
+        { new: true },
+      ).lean();
+    },
+    async completeProcessing(ownerId, id, pages, chunkCount) {
+      return DocumentModel.findOneAndUpdate(
+        { _id: id, ownerId, processingStatus: 'processing' },
+        {
+          $set: {
+            processingStatus: 'ready',
+            processingError: null,
+            extractedPages: pages,
+            extractedChunkCount: chunkCount,
+            processedAt: new Date(),
+          },
+        },
+        { new: true },
+      ).lean();
+    },
+    async failProcessing(ownerId, id, message) {
+      return DocumentModel.findOneAndUpdate(
+        { _id: id, ownerId },
+        { $set: { processingStatus: 'failed', processingError: String(message || 'Document processing failed.').slice(0, 300) } },
+        { new: true },
+      ).lean();
+    },
+    async getExtractedText(ownerId, id) {
+      const document = await this.getById(ownerId, id);
+      if (document.processingStatus !== 'ready') {
+        throw new DocumentProcessingStateError('Extracted text is not ready for this document yet.');
+      }
       return document;
     },
   };

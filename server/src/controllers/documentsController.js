@@ -1,5 +1,14 @@
 import { getAuth } from '@clerk/express';
-import { DocumentInputError, DocumentNotFoundError, serializeDocument } from '../services/documentService.js';
+import {
+  DocumentExtractionConfigurationError,
+  DocumentExtractionInputError,
+  DocumentExtractionUnavailableError,
+  DocumentInputError,
+  DocumentNotFoundError,
+  DocumentProcessingStateError,
+  serializeDocument,
+  serializeDocumentText,
+} from '../services/index.js';
 import { DocumentStorageConfigurationError, DocumentStorageError } from '../services/cloudinaryDocumentStorage.js';
 
 function ownerIdFromRequest(req, res) {
@@ -14,12 +23,16 @@ function ownerIdFromRequest(req, res) {
 function respondToDocumentError(error, res, next) {
   if (error instanceof DocumentInputError) return res.status(400).json({ message: error.message });
   if (error instanceof DocumentNotFoundError) return res.status(404).json({ message: 'Document not found.' });
+  if (error instanceof DocumentProcessingStateError) return res.status(409).json({ message: error.message });
+  if (error instanceof DocumentExtractionInputError) return res.status(422).json({ message: error.message });
+  if (error instanceof DocumentExtractionConfigurationError) return res.status(503).json({ message: error.message });
+  if (error instanceof DocumentExtractionUnavailableError) return res.status(502).json({ message: error.message });
   if (error instanceof DocumentStorageConfigurationError) return res.status(503).json({ message: error.message });
   if (error instanceof DocumentStorageError) return res.status(502).json({ message: error.message });
   return next(error);
 }
 
-export function createDocumentsController({ documentService, documentStorage }) {
+export function createDocumentsController({ documentService, documentStorage, documentProcessingService, knowledgeChunkService }) {
   return {
     async upload(req, res, next) {
       const ownerId = ownerIdFromRequest(req, res);
@@ -61,8 +74,25 @@ export function createDocumentsController({ documentService, documentStorage }) 
       try {
         const document = await documentService.getById(ownerId, req.params.id);
         await documentStorage.remove(document.cloudinaryPublicId);
+        await knowledgeChunkService.removeDocumentChunks(ownerId, document._id);
         await documentService.remove(ownerId, req.params.id);
         return res.status(204).end();
+      } catch (error) { return respondToDocumentError(error, res, next); }
+    },
+    async process(req, res, next) {
+      const ownerId = ownerIdFromRequest(req, res);
+      if (!ownerId) return;
+      try {
+        const document = await documentProcessingService.processDocument(ownerId, req.params.id);
+        return res.json({ document: serializeDocument(document) });
+      } catch (error) { return respondToDocumentError(error, res, next); }
+    },
+    async extractedText(req, res, next) {
+      const ownerId = ownerIdFromRequest(req, res);
+      if (!ownerId) return;
+      try {
+        const document = await documentService.getExtractedText(ownerId, req.params.id);
+        return res.json({ document: serializeDocumentText(document) });
       } catch (error) { return respondToDocumentError(error, res, next); }
     },
   };

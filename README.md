@@ -4,7 +4,7 @@ A personal knowledge-management app, built one small phase at a time.
 
 ## Current progress
 
-Phases 1–4 are complete. Clerk sign-in, the backend session check, MongoDB Atlas, private notes, and AI summarization are verified. Phase 5 is in progress: the code for private PDF uploads is ready for Cloudinary configuration and live verification. The protected workspace lets each signed-in user create, search, edit, organize, and delete their own notes. The original connection check remains at /connection.
+Phases 1–5 are complete. Clerk sign-in, the backend session check, MongoDB Atlas, private notes, AI summarization, and private PDF uploads are verified. Phase 6 adds page-aware PDF text extraction and reusable chunks for the later semantic-search and RAG phases. The protected workspace lets each signed-in user create, search, edit, organize, and delete their own notes. The original connection check remains at /connection.
 
 ## Phase 1: connect React to Express
 
@@ -94,6 +94,10 @@ The internal Python service now lives in `ai-service/`. It accepts a request onl
 
 The document upload screen accepts PDFs up to 10 MB. Express verifies the signed-in user and validates the file before sending it to Cloudinary private storage. MongoDB stores the owner and file metadata; it does not store the original file. Follow [docs/phase-5-setup.md](docs/phase-5-setup.md) to add the three Cloudinary values to `server/.env` and perform the live check.
 
+## Phase 6: readable PDF text
+
+After upload, select **Extract text** in the workspace. Express checks that the signed-in user owns the document, then FastAPI downloads a short-lived private Cloudinary link. LangChain's `PyPDFLoader` creates page-level documents, and `RecursiveCharacterTextSplitter` creates small page-aware chunks. MongoDB stores the extracted pages and chunks. The browser lets you inspect the exact text before embeddings and semantic search are added. Follow [docs/phase-6-setup.md](docs/phase-6-setup.md) to refresh the Python environment, run all three services, and verify the flow.
+
 ## API reference
 
 ### GET /api/health
@@ -128,7 +132,7 @@ The frontend treats non-success responses, invalid JSON, an unexpected status, a
 - The API binds to `127.0.0.1:5000`; Vite binds to `127.0.0.1:5173`. These are local development services.
 - If a port is busy, stop the earlier instance you started. Vite deliberately reports a busy port instead of silently picking another one.
 - The API reads an optional `PORT` environment variable. If you change it, update the proxy target in `client/vite.config.js` too.
-- Phase 2 loads client/.env through Vite and server/.env through Node. Phase 3 also requires MONGODB_URI in server/.env. Phase 5 requires CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in server/.env. See the per-application .env.example files; never commit real values.
+- Phase 2 loads client/.env through Vite and server/.env through Node. Phase 3 also requires MONGODB_URI in server/.env. Phase 5 requires CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in server/.env. Phases 4 and 6 need the existing matching AI_SERVICE_TOKEN in server/.env and ai-service/.env. See the per-application .env.example files; never commit real values.
 - When the backend is stopped, a Vite proxy connection error is expected. Restart Express and try the button again.
 - Keep future secrets out of React and Git. `.gitignore` excludes `.env` files, dependencies, and build output.
 
@@ -137,7 +141,7 @@ The frontend treats non-success responses, invalid JSON, an unexpected status, a
 - [Development Log](https://app.notion.com/p/3e8c1e94c8d181ffa4f0cb43a71caa0f)
 - [Architecture & Concepts](https://app.notion.com/p/3e8c1e94c8d181cda0b3cc006c35018b)
 
-Update the existing phase entry with actual work and checks. Preserve unchanged earlier phases. Private PDF upload is the current phase; text extraction starts after it is verified.
+Update the existing phase entry with actual work and checks. Preserve unchanged earlier phases. Phase 6 text extraction is the current phase.
 
 ## Official setup references
 

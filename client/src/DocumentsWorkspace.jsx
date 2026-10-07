@@ -17,6 +17,7 @@ export default function DocumentsWorkspace({ getToken }) {
   const [status, setStatus] = useState({ type: 'loading', message: 'Loading your documents…' });
   const [uploading, setUploading] = useState(false);
   const [workingId, setWorkingId] = useState(null);
+  const [extractedText, setExtractedText] = useState(null);
 
   async function request(path, options = {}) {
     const token = await getToken();
@@ -64,7 +65,7 @@ export default function DocumentsWorkspace({ getToken }) {
       setFolderId('');
       setTags('');
       event.currentTarget.reset();
-      setStatus({ type: 'success', message: 'PDF uploaded privately. Text extraction arrives in the next phase.' });
+      setStatus({ type: 'success', message: 'PDF uploaded privately. Select Extract text when you are ready.' });
     } catch (error) {
       setStatus({ type: 'error', message: error.message });
     } finally {
@@ -91,7 +92,36 @@ export default function DocumentsWorkspace({ getToken }) {
     try {
       await request(`/api/documents/${document._id}`, { method: 'DELETE' });
       setDocuments((current) => current.filter((item) => item._id !== document._id));
+      if (extractedText?._id === document._id) setExtractedText(null);
       setStatus({ type: 'success', message: 'Document deleted.' });
+    } catch (error) {
+      setStatus({ type: 'error', message: error.message });
+    } finally {
+      setWorkingId(null);
+    }
+  }
+
+  async function processDocument(document) {
+    setWorkingId(document._id);
+    try {
+      const path = document.processingStatus === 'failed' ? 'retry' : 'process';
+      const data = await request(`/api/documents/${document._id}/${path}`, { method: 'POST' });
+      setDocuments((current) => current.map((item) => item._id === document._id ? data.document : item));
+      setStatus({ type: 'success', message: `Text extracted into ${data.document.chunkCount} reusable chunk${data.document.chunkCount === 1 ? '' : 's'}.` });
+      await showExtractedText(data.document);
+    } catch (error) {
+      await loadDocuments();
+      setStatus({ type: 'error', message: error.message });
+    } finally {
+      setWorkingId(null);
+    }
+  }
+
+  async function showExtractedText(document) {
+    setWorkingId(document._id);
+    try {
+      const data = await request(`/api/documents/${document._id}/text`);
+      setExtractedText(data.document);
     } catch (error) {
       setStatus({ type: 'error', message: error.message });
     } finally {
@@ -101,9 +131,9 @@ export default function DocumentsWorkspace({ getToken }) {
 
   return (
     <section className="mt-10 rounded-2xl border border-line bg-white p-6">
-      <p className="text-sm text-muted">Phase 5 — private documents</p>
+      <p className="text-sm text-muted">Phases 5–6 — private documents and readable text</p>
       <h2 className="mt-2 font-display text-3xl">Upload a PDF</h2>
-      <p className="mt-3 max-w-3xl text-muted">Your file is checked by the server, stored privately, and linked only to your account. PDF text extraction and AI search come in later phases.</p>
+      <p className="mt-3 max-w-3xl text-muted">Your file is checked by the server, stored privately, and linked only to your account. Extracted text keeps its original page number so you can inspect what later AI features will use.</p>
 
       <form className="mt-6 grid gap-4" onSubmit={uploadDocument}>
         <label className="block font-medium" htmlFor="document-file">
@@ -132,17 +162,41 @@ export default function DocumentsWorkspace({ getToken }) {
               <div>
                 <h3 className="font-semibold">{document.originalName}</h3>
                 <p className="mt-1 text-sm text-muted">{formatBytes(document.size)} · {document.processingStatus} · Uploaded {formatDate(document.createdAt)}</p>
+                {document.processingStatus === 'ready' && <p className="mt-1 text-xs text-muted">{document.chunkCount} reusable text chunk{document.chunkCount === 1 ? '' : 's'} · Extracted {formatDate(document.processedAt)}</p>}
+                {document.processingStatus === 'failed' && <p className="mt-1 text-xs text-red-800">{document.processingError || 'Text extraction failed. Try again.'}</p>}
                 {(document.folderId || document.tags?.length) && <p className="mt-1 text-xs text-muted">{document.folderId && `Folder: ${document.folderId}`}{document.folderId && document.tags?.length ? ' · ' : ''}{document.tags?.length ? `Tags: ${document.tags.join(', ')}` : ''}</p>}
               </div>
               <div className="flex flex-wrap gap-2">
                 <button className="rounded-lg border border-forest px-3 py-2 text-sm font-semibold text-forest disabled:opacity-60" type="button" disabled={workingId === document._id} onClick={() => accessDocument(document, 'open')}>Open</button>
                 <button className="rounded-lg border border-forest px-3 py-2 text-sm font-semibold text-forest disabled:opacity-60" type="button" disabled={workingId === document._id} onClick={() => accessDocument(document, 'download')}>Download</button>
+                {['uploaded', 'failed'].includes(document.processingStatus) && <button className="rounded-lg bg-forest px-3 py-2 text-sm font-semibold text-white disabled:opacity-60" type="button" disabled={workingId === document._id} onClick={() => processDocument(document)}>{document.processingStatus === 'failed' ? 'Retry extraction' : 'Extract text'}</button>}
+                {document.processingStatus === 'ready' && <button className="rounded-lg border border-forest px-3 py-2 text-sm font-semibold text-forest disabled:opacity-60" type="button" disabled={workingId === document._id} onClick={() => showExtractedText(document)}>View extracted text</button>}
                 <button className="rounded-lg border border-red-700 px-3 py-2 text-sm font-semibold text-red-800 disabled:opacity-60" type="button" disabled={workingId === document._id} onClick={() => deleteDocument(document)}>Delete</button>
               </div>
             </div>
           </li>
         ))}
       </ul>
+
+      {extractedText && (
+        <section className="mt-6 rounded-xl border border-line bg-paper p-4" aria-label="Extracted document text">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold">Extracted text: {extractedText.originalName}</h3>
+              <p className="mt-1 text-sm text-muted">Check this text before semantic search or document Q&amp;A is added.</p>
+            </div>
+            <button className="text-sm font-semibold text-forest" type="button" onClick={() => setExtractedText(null)}>Close</button>
+          </div>
+          <div className="mt-4 max-h-96 space-y-4 overflow-y-auto rounded-lg bg-white p-4">
+            {extractedText.pages.map((page) => (
+              <article key={page.pageNumber}>
+                <h4 className="text-sm font-semibold text-forest">Page {page.pageNumber}</h4>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink">{page.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
     </section>
   );
 }

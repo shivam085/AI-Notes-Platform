@@ -1,8 +1,8 @@
 import multer from 'multer';
 import { Router } from 'express';
 import { createDocumentsController } from '../controllers/index.js';
-import { Document } from '../models/index.js';
-import { createCloudinaryDocumentStorage, createDocumentService, validatePdfUpload } from '../services/index.js';
+import { Document, KnowledgeChunk } from '../models/index.js';
+import { createCloudinaryDocumentStorage, createDocumentExtractionClient, createDocumentProcessingService, createDocumentService, createKnowledgeChunkService, validatePdfUpload } from '../services/index.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
 
@@ -16,7 +16,7 @@ function singlePdfUpload(req, res, next) {
   });
 }
 
-export function createDocumentsRouter({ clerk, DocumentModel = Document, databaseConfigured = Boolean(process.env.MONGODB_URI), storageConfigured = Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET), documentStorage } = {}) {
+export function createDocumentsRouter({ clerk, DocumentModel = Document, KnowledgeChunkModel = KnowledgeChunk, databaseConfigured = Boolean(process.env.MONGODB_URI), storageConfigured = Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET), documentStorage, documentExtractionClient } = {}) {
   const router = Router();
 
   // All document operations require a verified Clerk identity.
@@ -29,17 +29,30 @@ export function createDocumentsRouter({ clerk, DocumentModel = Document, databas
   });
 
   const service = createDocumentService(DocumentModel);
+  const knowledgeChunkService = createKnowledgeChunkService(KnowledgeChunkModel);
+  const storage = documentStorage || (storageConfigured ? createCloudinaryDocumentStorage() : null);
   const controller = createDocumentsController({
     documentService: { ...service, validateUpload: validatePdfUpload },
     // Do not construct Cloudinary's client until its environment settings exist.
     // The middleware above returns the useful setup response when they are absent.
-    documentStorage: documentStorage || (storageConfigured ? createCloudinaryDocumentStorage() : null),
+    documentStorage: storage,
+    knowledgeChunkService,
+    documentProcessingService: createDocumentProcessingService({
+      documentService: service,
+      documentStorage: storage,
+      knowledgeChunkService,
+      // Read AI configuration only when a user starts processing. Upload/list/open remain available without it.
+      getExtractionClient: () => documentExtractionClient || createDocumentExtractionClient(),
+    }),
   });
 
   router.post('/', singlePdfUpload, controller.upload);
   router.get('/', controller.list);
   router.get('/:id/open', (req, res, next) => controller.access(req, res, next, false));
   router.get('/:id/download', (req, res, next) => controller.access(req, res, next, true));
+  router.post('/:id/process', controller.process);
+  router.post('/:id/retry', controller.process);
+  router.get('/:id/text', controller.extractedText);
   router.delete('/:id', controller.remove);
 
   return router;

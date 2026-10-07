@@ -27,7 +27,7 @@ V1 includes six AI features: summarization, semantic search, document Q&A, auto-
 | Python + FastAPI | Run your document-processing and AI code. | Step 4 |
 | Gemini API | Generate summaries, answers, study material, and embeddings. | Step 4 onward |
 | Cloudinary | Store the original uploaded files. | Step 5 |
-| Atlas Vector Search | Find text with a meaning similar to a question. | Step 7 |
+| Qdrant | Find text with a meaning similar to a question. | Step 7 |
 | Docker + Nginx | Package the finished app and route incoming requests. | Step 10 |
 
 Useful starting knowledge: JavaScript functions, objects, arrays, `async/await`, React state, basic HTTP requests, JSON, and basic Python functions. Learn any unfamiliar item when its step needs it; you do not need to learn the entire stack first.
@@ -154,11 +154,13 @@ MongoDB stores information about the file; Cloudinary stores the file itself. Fi
 
 **Text extraction** means reading the words inside a file. A **chunk** is a smaller section of that text, such as a few paragraphs.
 
-- [ ] Use Python to extract PDF text while preserving page numbers.
-- [ ] Show the extracted text in a simple document view so you can check it.
+- [x] Use Python to extract PDF text while preserving page numbers.
+- [x] Show the extracted text in a simple document view so you can check it.
 - [ ] Add DOCX paragraphs and tables, followed by TXT and Markdown reading.
-- [ ] Split text into chunks and save each chunk with its owner, source ID, position, and PDF page number when available.
+- [x] Split text into chunks and save each chunk with its owner, source ID, position, and PDF page number when available.
 - [ ] Apply the same chunking function to note text.
+
+**Implementation note — 7 October 2026:** The PDF path uses LangChain's `PyPDFLoader` to create one `Document` per page and `RecursiveCharacterTextSplitter` to create chunks. This makes the document-loading and splitting steps visible in the same order as the selected learning playlist.
 
 For your first experiment, try around 2,000 characters per chunk with 200 characters repeated between neighboring chunks. This repeated section is called **overlap**; it helps preserve ideas near a boundary. Keep these values configurable and check the chosen model's input limit later.
 
@@ -175,9 +177,9 @@ An **embedding** is a list of numbers that represents aspects of a text's meanin
 For example, searching “How can we avoid processes getting stuck?” might find a note about deadlock prevention even without matching those exact words.
 
 - [ ] Generate and store an embedding for each chunk through Gemini.
-- [ ] Create an Atlas Vector Search index. Think of this as the database setup needed to search those number lists.
+- [ ] Create a Qdrant collection. Think of this as the vector database setup needed to search those number lists.
 - [ ] Turn the search query into an embedding using the same model and vector length.
-- [ ] Retrieve relevant chunks, filtering by the authenticated owner's data inside the search query.
+- [ ] Retrieve relevant chunks, filtering by the authenticated owner's data inside the Qdrant search filter.
 - [ ] Show the title, matching text, and source link. Add notes/documents, folder, and tag filters.
 
 Save the embedding model name and vector length with the indexing configuration. A new embedding model can require regenerating stored vectors. When a note changes, update its chunks/embeddings; do not keep showing its old content as current.
@@ -308,7 +310,7 @@ Use these as references for the relevant step, not a reading list to finish befo
 - Step 2: [Clerk's Express authentication guide](https://clerk.com/docs/reference/express/get-auth).
 - Steps 4 and 9: [Gemini structured output](https://ai.google.dev/gemini-api/docs/structured-output), for responses that follow a JSON structure.
 - Step 5: [Cloudinary private-file access](https://cloudinary.com/documentation/control_access_to_media).
-- Step 7: [Gemini embeddings](https://ai.google.dev/gemini-api/docs/embeddings) and [Atlas vector-index setup](https://www.mongodb.com/docs/vector-search/indexes/vector-search-type/).
+- Step 7: [Gemini embeddings](https://ai.google.dev/gemini-api/docs/embeddings) and [Qdrant collection setup](https://qdrant.tech/documentation/concepts/collections/).
 
 ## 8. Optional V2 — decide after V1 is finished
 
