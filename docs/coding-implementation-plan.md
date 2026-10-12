@@ -162,6 +162,8 @@ MongoDB stores information about the file; Cloudinary stores the file itself. Fi
 
 **Implementation note — 7 October 2026:** The PDF path uses LangChain's `PyPDFLoader` to create one `Document` per page and `RecursiveCharacterTextSplitter` to create chunks. This makes the document-loading and splitting steps visible in the same order as the selected learning playlist.
 
+**Verified — 8 October 2026:** The signed-in workspace processed a private uploaded PDF, saved six reusable chunks, and displayed the extracted text with its original page numbers. The PDF completion check has passed. DOCX, TXT, Markdown, and note-text processing remain planned extensions before the final V1 release.
+
 For your first experiment, try around 2,000 characters per chunk with 200 characters repeated between neighboring chunks. This repeated section is called **overlap**; it helps preserve ideas near a boundary. Keep these values configurable and check the chosen model's input limit later.
 
 Process one small file at a time during local development. Show processing/failure states and a retry button. Reliable background processing is added before deployment in step 10.
@@ -176,11 +178,13 @@ An **embedding** is a list of numbers that represents aspects of a text's meanin
 
 For example, searching “How can we avoid processes getting stuck?” might find a note about deadlock prevention even without matching those exact words.
 
-- [ ] Generate and store an embedding for each chunk through Gemini.
-- [ ] Create a Qdrant collection. Think of this as the vector database setup needed to search those number lists.
-- [ ] Turn the search query into an embedding using the same model and vector length.
-- [ ] Retrieve relevant chunks, filtering by the authenticated owner's data inside the Qdrant search filter.
-- [ ] Show the title, matching text, and source link. Add notes/documents, folder, and tag filters.
+- [x] Generate and store a Gemini embedding for each ready PDF chunk.
+- [x] Create a Qdrant collection. Think of this as the vector database setup needed to search those number lists.
+- [x] Turn the search query into an embedding using the same model and vector length.
+- [x] Retrieve relevant PDF chunks, filtering by the authenticated owner's data inside the Qdrant search filter.
+- [x] Show the title, matching text, page, and private source link, with PDF folder/tag filters. Note chunk indexing is a later V1 extension.
+
+**Implementation note — 8 October 2026; corrected 13 October 2026:** FastAPI uses Gemini's `RETRIEVAL_DOCUMENT` task for stored chunks and `RETRIEVAL_QUERY` for search questions, with a shared 768-dimensional vector size. `QdrantVectorStore` creates an owner-filtered `ai_notes_chunks` collection in Qdrant Cloud. `QDRANT_URL` and `QDRANT_API_KEY` are required in `ai-service/.env`; the former local persistent-mode fallback was removed after the hosted cluster was configured.
 
 Save the embedding model name and vector length with the indexing configuration. A new embedding model can require regenerating stored vectors. When a note changes, update its chunks/embeddings; do not keep showing its old content as current.
 

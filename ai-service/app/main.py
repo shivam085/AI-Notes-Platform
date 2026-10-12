@@ -3,9 +3,11 @@ from typing import Annotated, Protocol
 from fastapi import FastAPI, Header, HTTPException, status
 
 from app.config import Settings
-from app.schemas import ExtractPdfRequest, ExtractPdfResponse, ExtractedChunk, ExtractedPage, SummarizeRequest, SummarizeResponse
+from app.schemas import EmbedRequest, EmbedResponse, ExtractPdfRequest, ExtractPdfResponse, ExtractedChunk, ExtractedPage, IndexChunksRequest, IndexChunksResponse, SemanticSearchRequest, SemanticSearchResponse, SummarizeRequest, SummarizeResponse
+from app.services.embedding_service import GeminiEmbeddingError, GeminiEmbeddingService
 from app.services.gemini_service import GeminiServiceError, GeminiSummaryService
 from app.services.pdf_extraction_service import PdfExtractionError, PdfTextExtractor
+from app.services.vector_store import QdrantStoreError, QdrantVectorStore
 
 
 class SummaryService(Protocol):
@@ -16,14 +18,24 @@ class PdfExtractionService(Protocol):
     def extract(self, source_url: str): ...
 
 
+class EmbeddingService(Protocol):
+    def embed_document(self, text: str) -> list[float]: ...
+
+    def embed_query(self, text: str) -> list[float]: ...
+
+
 def create_app(
     settings: Settings | None = None,
     summarizer: SummaryService | None = None,
     pdf_extractor: PdfExtractionService | None = None,
+    embedder: EmbeddingService | None = None,
+    vector_store: QdrantVectorStore | None = None,
 ) -> FastAPI:
     settings = settings or Settings.from_environment()
     summarizer = summarizer or GeminiSummaryService(settings)
     pdf_extractor = pdf_extractor or PdfTextExtractor(settings)
+    embedder = embedder or GeminiEmbeddingService(settings)
+    vector_store = vector_store or QdrantVectorStore(settings)
     app = FastAPI(title="AI Notes Platform AI Service", version="0.1.0")
 
     @app.get("/health")
@@ -61,6 +73,50 @@ def create_app(
             )
         except PdfExtractionError as error:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error)) from error
+
+    @app.post("/internal/embed", response_model=EmbedResponse)
+    def embed(
+        request: EmbedRequest,
+        x_ai_service_token: Annotated[str | None, Header()] = None,
+    ) -> EmbedResponse:
+        if not settings.ai_service_token:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI service authentication is not configured.")
+        if x_ai_service_token != settings.ai_service_token:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Internal service authentication failed.")
+
+        try:
+            embedding = embedder.embed_document(request.text) if request.purpose == "document" else embedder.embed_query(request.text)
+            return EmbedResponse(embedding=embedding, dimensions=len(embedding))
+        except GeminiEmbeddingError as error:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+
+    @app.post("/internal/index-chunks", response_model=IndexChunksResponse)
+    def index_chunks(
+        request: IndexChunksRequest,
+        x_ai_service_token: Annotated[str | None, Header()] = None,
+    ) -> IndexChunksResponse:
+        if not settings.ai_service_token:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI service authentication is not configured.")
+        if x_ai_service_token != settings.ai_service_token:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Internal service authentication failed.")
+        try:
+            return IndexChunksResponse(indexed_count=vector_store.index_chunks(request.chunks, embedder))
+        except (GeminiEmbeddingError, QdrantStoreError) as error:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+
+    @app.post("/internal/semantic-search", response_model=SemanticSearchResponse)
+    def semantic_search(
+        request: SemanticSearchRequest,
+        x_ai_service_token: Annotated[str | None, Header()] = None,
+    ) -> SemanticSearchResponse:
+        if not settings.ai_service_token:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI service authentication is not configured.")
+        if x_ai_service_token != settings.ai_service_token:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Internal service authentication failed.")
+        try:
+            return SemanticSearchResponse(results=vector_store.search(request, embedder))
+        except (GeminiEmbeddingError, QdrantStoreError) as error:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
 
     return app
 

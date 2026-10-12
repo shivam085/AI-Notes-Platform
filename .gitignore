@@ -11,3 +11,4 @@ Thumbs.db
 __pycache__/
 *.py[cod]
 ai-service/.venv/
+ai-service/.qdrant/

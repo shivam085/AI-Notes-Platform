@@ -6,3 +6,5 @@ export { createCloudinaryDocumentStorage, DocumentStorageConfigurationError, Doc
 export { createKnowledgeChunkService, KnowledgeChunkInputError } from './knowledgeChunkService.js';
 export { createDocumentExtractionClient, DocumentExtractionConfigurationError, DocumentExtractionInputError, DocumentExtractionUnavailableError } from './documentExtractionClient.js';
 export { createDocumentProcessingService } from './documentProcessingService.js';
+export { createSemanticSearchClient, SemanticSearchConfigurationError, SemanticSearchUnavailableError } from './semanticSearchClient.js';
+export { createSemanticSearchService, SemanticSearchInputError } from './semanticSearchService.js';
