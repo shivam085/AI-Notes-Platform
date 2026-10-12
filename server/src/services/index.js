@@ -8,3 +8,5 @@ export { createDocumentExtractionClient, DocumentExtractionConfigurationError, D
 export { createDocumentProcessingService } from './documentProcessingService.js';
 export { createSemanticSearchClient, SemanticSearchConfigurationError, SemanticSearchUnavailableError } from './semanticSearchClient.js';
 export { createSemanticSearchService, SemanticSearchInputError } from './semanticSearchService.js';
+export { createRagClient, RagConfigurationError, RagUnavailableError } from './ragClient.js';
+export { createRagService, RagConversationNotFoundError, RagInputError } from './ragService.js';

@@ -3,10 +3,11 @@ from typing import Annotated, Protocol
 from fastapi import FastAPI, Header, HTTPException, status
 
 from app.config import Settings
-from app.schemas import EmbedRequest, EmbedResponse, ExtractPdfRequest, ExtractPdfResponse, ExtractedChunk, ExtractedPage, IndexChunksRequest, IndexChunksResponse, SemanticSearchRequest, SemanticSearchResponse, SummarizeRequest, SummarizeResponse
+from app.schemas import EmbedRequest, EmbedResponse, ExtractPdfRequest, ExtractPdfResponse, ExtractedChunk, ExtractedPage, IndexChunksRequest, IndexChunksResponse, RagAnswer, RagQuestionRequest, SemanticSearchRequest, SemanticSearchResponse, SummarizeRequest, SummarizeResponse
 from app.services.embedding_service import GeminiEmbeddingError, GeminiEmbeddingService
 from app.services.gemini_service import GeminiServiceError, GeminiSummaryService
 from app.services.pdf_extraction_service import PdfExtractionError, PdfTextExtractor
+from app.services.rag_service import GeminiRagError, GeminiRagService
 from app.services.vector_store import QdrantStoreError, QdrantVectorStore
 
 
@@ -24,18 +25,24 @@ class EmbeddingService(Protocol):
     def embed_query(self, text: str) -> list[float]: ...
 
 
+class RagService(Protocol):
+    def answer_question(self, question: str, contexts) -> RagAnswer: ...
+
+
 def create_app(
     settings: Settings | None = None,
     summarizer: SummaryService | None = None,
     pdf_extractor: PdfExtractionService | None = None,
     embedder: EmbeddingService | None = None,
     vector_store: QdrantVectorStore | None = None,
+    rag_service: RagService | None = None,
 ) -> FastAPI:
     settings = settings or Settings.from_environment()
     summarizer = summarizer or GeminiSummaryService(settings)
     pdf_extractor = pdf_extractor or PdfTextExtractor(settings)
     embedder = embedder or GeminiEmbeddingService(settings)
     vector_store = vector_store or QdrantVectorStore(settings)
+    rag_service = rag_service or GeminiRagService(settings)
     app = FastAPI(title="AI Notes Platform AI Service", version="0.1.0")
 
     @app.get("/health")
@@ -116,6 +123,20 @@ def create_app(
         try:
             return SemanticSearchResponse(results=vector_store.search(request, embedder))
         except (GeminiEmbeddingError, QdrantStoreError) as error:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+
+    @app.post("/internal/answer-question", response_model=RagAnswer)
+    def answer_question(
+        request: RagQuestionRequest,
+        x_ai_service_token: Annotated[str | None, Header()] = None,
+    ) -> RagAnswer:
+        if not settings.ai_service_token:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI service authentication is not configured.")
+        if x_ai_service_token != settings.ai_service_token:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Internal service authentication failed.")
+        try:
+            return rag_service.answer_question(request.question, request.contexts)
+        except GeminiRagError as error:
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
 
     return app

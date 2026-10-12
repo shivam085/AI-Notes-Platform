@@ -84,3 +84,21 @@ class SemanticSearchResult(BaseModel):
 
 class SemanticSearchResponse(BaseModel):
     results: list[SemanticSearchResult]
+
+
+class RagContext(BaseModel):
+    chunk_id: str = Field(min_length=1, max_length=100)
+    source_id: str = Field(min_length=1, max_length=100)
+    title: str = Field(min_length=1, max_length=180)
+    page_number: int | None = Field(default=None, ge=1)
+    text: str = Field(min_length=1, max_length=2_000)
+
+
+class RagQuestionRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2_000)
+    contexts: list[RagContext] = Field(default_factory=list, max_length=4)
+
+
+class RagAnswer(BaseModel):
+    answer: str = Field(min_length=1, max_length=12_000)
+    grounded: bool

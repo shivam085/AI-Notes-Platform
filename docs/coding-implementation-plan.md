@@ -206,13 +206,15 @@ Send those chunks + the question to Gemini
 Show an answer + source references
 ```
 
-- [ ] Reuse the search code from step 7.
-- [ ] Start with a few useful chunks and a fixed maximum amount of context.
-- [ ] Instruct Gemini to answer from that context and say when information is missing.
-- [ ] Resolve source references from the actual retrieved chunks. Do not trust invented file names or page numbers.
-- [ ] Add chat history, source links, loading/error states, and conversation deletion.
+- [x] Reuse the search code from step 7.
+- [x] Start with a few useful chunks and a fixed maximum amount of context.
+- [x] Instruct Gemini to answer from that context and say when information is missing.
+- [x] Resolve source references from the actual retrieved chunks. Do not trust invented file names or page numbers.
+- [x] Add chat history, source links, loading/error states, and conversation deletion.
 
 Check permissions again before sending source text to Gemini. Treat instructions found inside an uploaded document as document content, not instructions controlling your application.
+
+**Verified — 13 October 2026:** The workspace can ask questions about indexed private PDFs, show saved PDF/page source references, reload or delete private conversations, and abstain when search returns no evidence or only a weak match. Express rechecks the Qdrant candidates in MongoDB before FastAPI receives source text. Automated Node, Python, and frontend build checks pass; a live grounded answer previously returned four verified source references from the configured cloud services.
 
 **Done when:** A question answered by your document gets a supported answer with the correct source. An unrelated question gets an honest “I couldn't find enough information” response. Check answer correctness yourself; a citation alone is not proof.
 

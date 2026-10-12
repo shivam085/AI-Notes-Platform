@@ -4,7 +4,7 @@ A personal knowledge-management app, built one small phase at a time.
 
 ## Current progress
 
-Phases 1–7 are complete. Clerk sign-in, the backend session check, MongoDB Atlas, private notes, AI summarization, private PDF uploads, page-aware PDF extraction, and private semantic PDF search are verified. The protected workspace lets each signed-in user create, search, edit, organize, and delete their own notes. The original connection check remains at /connection.
+Phases 1–8 are complete. Clerk sign-in, the backend session check, MongoDB Atlas, private notes, AI summarization, private PDF uploads, page-aware PDF extraction, semantic PDF search, and grounded document Q&A are verified. The protected workspace lets each signed-in user create, search, edit, organize, and delete their own notes. The original connection check remains at /connection.
 
 ## Phase 1: connect React to Express
 
@@ -102,6 +102,10 @@ After upload, select **Extract text** in the workspace. Express checks that the 
 
 Select **Index ready PDFs** to turn each ready PDF chunk into a 768-number Gemini embedding and store it in Qdrant Cloud. Then use **Search by meaning** to retrieve your own related PDF chunks, with their title, page number, match score, and authorized source link. Configure Qdrant Cloud in `ai-service/.env`, then follow [docs/phase-7-setup.md](docs/phase-7-setup.md) for the beginner-friendly setup and verification steps.
 
+## Phase 8: grounded document Q&A
+
+Use **Ask your documents** to ask a question about ready, indexed PDFs. The app uses RAG: it retrieves a few similar chunks from Qdrant Cloud, verifies those chunks and their documents are still owned by you in MongoDB, then sends only that checked context to Gemini. Each grounded answer includes private PDF/page source cards. Weak or absent evidence returns an honest missing-information response without calling Gemini. Conversations, messages, citations, and deletion are private to the signed-in account. Follow [docs/phase-8-setup.md](docs/phase-8-setup.md) to configure the small RAG limits and verify the feature.
+
 ## API reference
 
 ### GET /api/health
@@ -136,7 +140,7 @@ The frontend treats non-success responses, invalid JSON, an unexpected status, a
 - The API binds to `127.0.0.1:5000`; Vite binds to `127.0.0.1:5173`. These are local development services.
 - If a port is busy, stop the earlier instance you started. Vite deliberately reports a busy port instead of silently picking another one.
 - The API reads an optional `PORT` environment variable. If you change it, update the proxy target in `client/vite.config.js` too.
-- Phase 2 loads client/.env through Vite and server/.env through Node. Phase 3 also requires MONGODB_URI in server/.env. Phase 5 requires CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in server/.env. Phases 4–7 need the existing matching AI_SERVICE_TOKEN in server/.env and ai-service/.env. Phase 7 also requires `QDRANT_URL` and `QDRANT_API_KEY` in ai-service/.env. See the per-application .env.example files; never commit real values.
+- Phase 2 loads client/.env through Vite and server/.env through Node. Phase 3 also requires MONGODB_URI in server/.env. Phase 5 requires CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in server/.env. Phases 4–8 need the existing matching AI_SERVICE_TOKEN in server/.env and ai-service/.env. Phases 7–8 also require `QDRANT_URL` and `QDRANT_API_KEY` in ai-service/.env. Phase 8 optionally uses `RAG_MIN_SIMILARITY_SCORE` in server/.env and the RAG context limits in ai-service/.env. See the per-application .env.example files; never commit real values.
 - When the backend is stopped, a Vite proxy connection error is expected. Restart Express and try the button again.
 - Keep future secrets out of React and Git. `.gitignore` excludes `.env` files, dependencies, and build output.
 
@@ -145,7 +149,7 @@ The frontend treats non-success responses, invalid JSON, an unexpected status, a
 - [Development Log](https://app.notion.com/p/3e8c1e94c8d181ffa4f0cb43a71caa0f)
 - [Architecture & Concepts](https://app.notion.com/p/3e8c1e94c8d181cda0b3cc006c35018b)
 
-Update the existing phase entry with actual work and checks. Preserve unchanged earlier phases. Phase 7 semantic PDF search is complete; Phase 8 is next.
+Update the existing phase entry with actual work and checks. Preserve unchanged earlier phases. Phase 8 grounded document Q&A is complete; Phase 9 is next.
 
 ## Official setup references
 

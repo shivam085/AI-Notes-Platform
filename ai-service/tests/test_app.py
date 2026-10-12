@@ -6,7 +6,7 @@ from app.config import Settings
 from app.main import create_app
 from app.services.pdf_extraction_service import PdfExtractionResult, PdfTextExtractor
 from app.services.text_chunking import TextChunk, TextPage, split_pages_into_chunks
-from app.schemas import IndexChunk, SemanticSearchRequest, SemanticSearchResult
+from app.schemas import IndexChunk, RagAnswer, SemanticSearchRequest, SemanticSearchResult
 from app.services.vector_store import QdrantStoreError, QdrantVectorStore
 from qdrant_client import QdrantClient, models
 
@@ -58,6 +58,15 @@ class FakeVectorStore:
         ]
 
 
+class FakeRagService:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def answer_question(self, question, contexts) -> RagAnswer:
+        self.calls.append({"question": question, "contexts": contexts})
+        return RagAnswer(answer="Indexes make repeated lookups faster.", grounded=True)
+
+
 def minimal_text_pdf(text: str) -> bytes:
     content = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode()
     objects = [
@@ -91,7 +100,8 @@ class AiServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         settings = Settings("not-used-by-this-test", "test-model", "local-test-token")
         self.vector_store = FakeVectorStore()
-        self.client = TestClient(create_app(settings, FakeSummaryService(), FakePdfExtractor(), FakeEmbeddingService(), self.vector_store))
+        self.rag_service = FakeRagService()
+        self.client = TestClient(create_app(settings, FakeSummaryService(), FakePdfExtractor(), FakeEmbeddingService(), self.vector_store, self.rag_service))
 
     def test_health(self) -> None:
         response = self.client.get("/health")
@@ -184,6 +194,33 @@ class AiServiceTests(unittest.TestCase):
         self.assertEqual(searched.json()["results"][0]["source_id"], "document-1")
         self.assertEqual(self.vector_store.search_requests[0].owner_id, "user-1")
         self.assertEqual(self.vector_store.search_requests[0].tags, ["database"])
+
+    def test_rag_answer_requires_the_internal_token(self) -> None:
+        response = self.client.post(
+            "/internal/answer-question",
+            json={"question": "How do indexes help?", "contexts": []},
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_rag_answer_receives_the_question_and_rechecked_context(self) -> None:
+        response = self.client.post(
+            "/internal/answer-question",
+            headers={"X-AI-Service-Token": "local-test-token"},
+            json={
+                "question": "How do indexes help?",
+                "contexts": [{
+                    "chunk_id": "chunk-1",
+                    "source_id": "document-1",
+                    "title": "Database revision",
+                    "page_number": 2,
+                    "text": "Indexes make repeated lookups faster.",
+                }],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"answer": "Indexes make repeated lookups faster.", "grounded": True})
+        self.assertEqual(self.rag_service.calls[0]["question"], "How do indexes help?")
+        self.assertEqual(self.rag_service.calls[0]["contexts"][0].title, "Database revision")
 
     def test_pdf_extraction_returns_page_aware_chunks(self) -> None:
         response = self.client.post(

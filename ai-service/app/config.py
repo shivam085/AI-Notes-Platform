@@ -18,6 +18,8 @@ class Settings:
     embedding_model: str = "gemini-embedding-001"
     embedding_dimensions: int = 768
     max_embedding_input_chars: int = 2_000
+    max_rag_context_chunks: int = 4
+    max_rag_context_chars: int = 7_000
     qdrant_url: str | None = None
     qdrant_api_key: str | None = None
     qdrant_collection: str = "ai_notes_chunks"
@@ -31,6 +33,8 @@ class Settings:
             ai_service_token=os.getenv("AI_SERVICE_TOKEN"),
             embedding_model=os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001"),
             embedding_dimensions=int(os.getenv("GEMINI_EMBEDDING_DIMENSIONS", "768")),
+            max_rag_context_chunks=int(os.getenv("RAG_MAX_CONTEXT_CHUNKS", "4")),
+            max_rag_context_chars=int(os.getenv("RAG_MAX_CONTEXT_CHARS", "7000")),
             qdrant_url=os.getenv("QDRANT_URL") or None,
             qdrant_api_key=os.getenv("QDRANT_API_KEY") or None,
             qdrant_collection=os.getenv("QDRANT_COLLECTION", "ai_notes_chunks"),

@@ -5,6 +5,7 @@ import ConnectionPage from './App.jsx';
 import NotesWorkspace from './NotesWorkspace.jsx';
 import DocumentsWorkspace from './DocumentsWorkspace.jsx';
 import SemanticSearch from './SemanticSearch.jsx';
+import RagChat from './RagChat.jsx';
 
 const key = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY?.trim();
 const button = 'inline-block rounded-xl bg-forest px-5 py-3 text-sm font-semibold text-white';
@@ -122,6 +123,7 @@ function Workspace() {
       <NotesWorkspace getToken={getToken} />
       <DocumentsWorkspace getToken={getToken} />
       <SemanticSearch getToken={getToken} />
+      <RagChat getToken={getToken} />
     </Layout>
   );
 }
