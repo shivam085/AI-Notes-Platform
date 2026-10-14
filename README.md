@@ -4,7 +4,7 @@ A personal knowledge-management app, built one small phase at a time.
 
 ## Current progress
 
-Phases 1–8 are complete. Clerk sign-in, the backend session check, MongoDB Atlas, private notes, AI summarization, private PDF uploads, page-aware PDF extraction, semantic PDF search, and grounded document Q&A are verified. The protected workspace lets each signed-in user create, search, edit, organize, and delete their own notes. The original connection check remains at /connection.
+Phases 1–9 are complete. Editable AI tag suggestions work for saved notes and text-ready PDFs, while private flashcard decks and private quizzes work for saved notes. Clerk sign-in, the backend session check, MongoDB Atlas, private notes, AI summarization, private PDF uploads, page-aware PDF extraction, semantic PDF search, grounded document Q&A, and the Phase 9 study tools are verified. The protected workspace lets each signed-in user create, search, edit, organize, and delete their own notes. The original connection check remains at /connection. Phase 10 is not started.
 
 ## Phase 1: connect React to Express
 
@@ -106,6 +106,14 @@ Select **Index ready PDFs** to turn each ready PDF chunk into a 768-number Gemin
 
 Use **Ask your documents** to ask a question about ready, indexed PDFs. The app uses RAG: it retrieves a few similar chunks from Qdrant Cloud, verifies those chunks and their documents are still owned by you in MongoDB, then sends only that checked context to Gemini. Each grounded answer includes private PDF/page source cards. Weak or absent evidence returns an honest missing-information response without calling Gemini. Conversations, messages, citations, and deletion are private to the signed-in account. Follow [docs/phase-8-setup.md](docs/phase-8-setup.md) to configure the small RAG limits and verify the feature.
 
+## Phase 9: study tools
+
+Select **Suggest tags with AI** on a saved note or a text-ready private PDF to receive 3–5 editable tag ideas. Express loads only the signed-in user's saved source, FastAPI requests structured JSON from Gemini, and both services validate the response. For notes, **Use suggestions** adds ideas to the normal tag field; for PDFs, review or edit the tag field and select **Save tags**. Nothing is stored automatically. Follow [docs/phase-9-auto-tagging.md](docs/phase-9-auto-tagging.md) to understand and test that slice.
+
+Use **Flashcards** to select a saved note, generate exactly five question-and-answer cards, review them, then explicitly save a private deck. Each deck stays scoped to the signed-in account and supports flip, next/previous, shuffle, and deletion. Follow [docs/phase-9-flashcards.md](docs/phase-9-flashcards.md) for the request flow, routes, and verification steps.
+
+Use **Quizzes** to create five multiple-choice questions from a saved note. Review the answer key and explanations before saving a private quiz. When taking a saved quiz, React scores the selected answers locally and reveals the explanations after submission. Follow [docs/phase-9-quizzes.md](docs/phase-9-quizzes.md) for the request flow, routes, and verification steps.
+
 ## API reference
 
 ### GET /api/health
@@ -140,7 +148,7 @@ The frontend treats non-success responses, invalid JSON, an unexpected status, a
 - The API binds to `127.0.0.1:5000`; Vite binds to `127.0.0.1:5173`. These are local development services.
 - If a port is busy, stop the earlier instance you started. Vite deliberately reports a busy port instead of silently picking another one.
 - The API reads an optional `PORT` environment variable. If you change it, update the proxy target in `client/vite.config.js` too.
-- Phase 2 loads client/.env through Vite and server/.env through Node. Phase 3 also requires MONGODB_URI in server/.env. Phase 5 requires CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in server/.env. Phases 4–8 need the existing matching AI_SERVICE_TOKEN in server/.env and ai-service/.env. Phases 7–8 also require `QDRANT_URL` and `QDRANT_API_KEY` in ai-service/.env. Phase 8 optionally uses `RAG_MIN_SIMILARITY_SCORE` in server/.env and the RAG context limits in ai-service/.env. See the per-application .env.example files; never commit real values.
+- Phase 2 loads client/.env through Vite and server/.env through Node. Phase 3 also requires MONGODB_URI in server/.env. Phase 5 requires CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in server/.env. Phases 4–9 need the existing matching AI_SERVICE_TOKEN in server/.env and ai-service/.env. Phase 9 also uses `AI_SERVICE_TIMEOUT_MS` in server/.env and `GEMINI_REQUEST_TIMEOUT_MS` in ai-service/.env, which keep a slow study-tool request from waiting forever. Phases 7–8 also require `QDRANT_URL` and `QDRANT_API_KEY` in ai-service/.env. Phase 8 optionally uses `RAG_MIN_SIMILARITY_SCORE` in server/.env and the RAG context limits in ai-service/.env. See the per-application .env.example files; never commit real values.
 - When the backend is stopped, a Vite proxy connection error is expected. Restart Express and try the button again.
 - Keep future secrets out of React and Git. `.gitignore` excludes `.env` files, dependencies, and build output.
 
@@ -149,7 +157,7 @@ The frontend treats non-success responses, invalid JSON, an unexpected status, a
 - [Development Log](https://app.notion.com/p/3e8c1e94c8d181ffa4f0cb43a71caa0f)
 - [Architecture & Concepts](https://app.notion.com/p/3e8c1e94c8d181cda0b3cc006c35018b)
 
-Update the existing phase entry with actual work and checks. Preserve unchanged earlier phases. Phase 8 grounded document Q&A is complete; Phase 9 is next.
+Update the existing phase entry with actual work and checks. Preserve unchanged earlier phases. Phase 9 study tools are complete; Phase 10 finishing, testing, and deployment has not started.
 
 ## Official setup references
 

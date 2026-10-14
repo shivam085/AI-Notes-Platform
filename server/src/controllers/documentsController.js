@@ -68,6 +68,14 @@ export function createDocumentsController({ documentService, documentStorage, do
         return res.json({ url: documentStorage.createAccessUrl({ publicId: document.cloudinaryPublicId, format: document.format, download }) });
       } catch (error) { return respondToDocumentError(error, res, next); }
     },
+    async updateTags(req, res, next) {
+      const ownerId = ownerIdFromRequest(req, res);
+      if (!ownerId) return;
+      try {
+        const document = await documentService.updateTags(ownerId, req.params.id, req.body?.tags);
+        return res.json({ document: serializeDocument(document) });
+      } catch (error) { return respondToDocumentError(error, res, next); }
+    },
     async remove(req, res, next) {
       const ownerId = ownerIdFromRequest(req, res);
       if (!ownerId) return;

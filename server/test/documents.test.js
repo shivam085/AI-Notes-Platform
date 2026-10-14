@@ -122,6 +122,42 @@ test('an owner receives a short-lived access link and another account document i
   assert.equal(storage.removed.length, 0);
 });
 
+test('an owner can update document tags while another account document stays hidden', async (t) => {
+  const documentModel = fakeDocumentModel();
+  const storage = fakeStorage();
+  const body = new FormData();
+  body.append('document', new Blob([Buffer.from('%PDF-1.7\nexample')], { type: 'application/pdf' }), 'revision.pdf');
+  await request(t, '/api/documents', { method: 'POST', body }, documentModel, storage);
+
+  const { response: updated } = await request(
+    t,
+    `/api/documents/${documentId}`,
+    { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tags: ['database', 'revision'] }) },
+    documentModel,
+    storage,
+  );
+  assert.equal(updated.status, 200);
+  assert.deepEqual((await updated.json()).document.tags, ['database', 'revision']);
+
+  const { response: missingTags } = await request(
+    t,
+    `/api/documents/${documentId}`,
+    { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) },
+    documentModel,
+    storage,
+  );
+  assert.equal(missingTags.status, 400);
+
+  const { response: blocked } = await request(
+    t,
+    '/api/documents/507f191e810c19729de860ea',
+    { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tags: ['private'] }) },
+    documentModel,
+    storage,
+  );
+  assert.equal(blocked.status, 404);
+});
+
 test('an owner can extract page-aware text and cannot process a ready document again', async (t) => {
   const documentModel = fakeDocumentModel();
   const storage = fakeStorage();

@@ -50,6 +50,7 @@ export function createDocumentsRouter({ clerk, DocumentModel = Document, Knowled
   router.get('/', controller.list);
   router.get('/:id/open', (req, res, next) => controller.access(req, res, next, false));
   router.get('/:id/download', (req, res, next) => controller.access(req, res, next, true));
+  router.patch('/:id', controller.updateTags);
   router.post('/:id/process', controller.process);
   router.post('/:id/retry', controller.process);
   router.get('/:id/text', controller.extractedText);

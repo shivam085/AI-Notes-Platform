@@ -4,10 +4,11 @@ import { createNotesRouter } from './notes.routes.js';
 import { createAiRouter } from './ai.routes.js';
 import { createDocumentsRouter } from './documents.routes.js';
 import { createSemanticSearchRouter } from './semanticSearch.routes.js';
+import { createStudyRouter } from './study.routes.js';
 
 // This is the single entry point for all /api routes, matching the backend structure
 // used across the user's projects while keeping each feature in its own route file.
-export function createApiRouter({ clerk, NoteModel, DocumentModel, KnowledgeChunkModel, ConversationModel, MessageModel, databaseConfigured, aiClient, documentStorage, documentExtractionClient, semanticSearchClient, ragClient, cloudinaryConfigured } = {}) {
+export function createApiRouter({ clerk, NoteModel, DocumentModel, KnowledgeChunkModel, ConversationModel, MessageModel, StudySetModel, databaseConfigured, aiClient, documentStorage, documentExtractionClient, semanticSearchClient, ragClient, cloudinaryConfigured } = {}) {
   const router = Router();
 
   router.use('/auth', createAuthRouter({ clerk }));
@@ -15,6 +16,7 @@ export function createApiRouter({ clerk, NoteModel, DocumentModel, KnowledgeChun
   router.use('/ai', createAiRouter({ clerk, NoteModel, DocumentModel, KnowledgeChunkModel, ConversationModel, MessageModel, databaseConfigured, aiClient, semanticSearchClient, ragClient }));
   router.use('/documents', createDocumentsRouter({ clerk, DocumentModel, KnowledgeChunkModel, databaseConfigured, documentStorage, documentExtractionClient, storageConfigured: cloudinaryConfigured }));
   router.use('/search', createSemanticSearchRouter({ clerk, DocumentModel, KnowledgeChunkModel, databaseConfigured, semanticSearchClient }));
+  router.use('/study', createStudyRouter({ clerk, NoteModel, StudySetModel, databaseConfigured, aiClient }));
 
   return router;
 }

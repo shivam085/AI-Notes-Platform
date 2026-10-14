@@ -11,6 +11,7 @@ class Settings:
     gemini_api_key: str | None
     gemini_model: str
     ai_service_token: str | None
+    gemini_request_timeout_ms: int = 30_000
     max_summary_input_chars: int = 12_000
     max_pdf_text_chars: int = 500_000
     chunk_size_chars: int = 2_000
@@ -31,6 +32,7 @@ class Settings:
             gemini_api_key=os.getenv("GEMINI_API_KEY"),
             gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
             ai_service_token=os.getenv("AI_SERVICE_TOKEN"),
+            gemini_request_timeout_ms=int(os.getenv("GEMINI_REQUEST_TIMEOUT_MS", "30000")),
             embedding_model=os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001"),
             embedding_dimensions=int(os.getenv("GEMINI_EMBEDDING_DIMENSIONS", "768")),
             max_rag_context_chunks=int(os.getenv("RAG_MAX_CONTEXT_CHUNKS", "4")),

@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { createAiController, createRagController } from '../controllers/index.js';
-import { createAiServiceClient, createNoteService, createRagClient, createRagService, createSemanticSearchClient, createSemanticSearchService, createSummaryService } from '../services/index.js';
+import { createAiController, createRagController, createTagController } from '../controllers/index.js';
+import { createAiServiceClient, createDocumentService, createNoteService, createRagClient, createRagService, createSemanticSearchClient, createSemanticSearchService, createSummaryService, createTagSuggestionService } from '../services/index.js';
 
 export function createAiRouter({ clerk, NoteModel, DocumentModel, KnowledgeChunkModel, ConversationModel, MessageModel, databaseConfigured, aiClient, semanticSearchClient, ragClient } = {}) {
   const router = Router();
 
-  // All AI actions use a Clerk-verified owner before reading note content.
+  // All AI actions use a Clerk-verified owner before reading saved source content.
   router.use(clerk.requireConfiguration, clerk.middleware);
 
   router.post('/summarize', (req, res, next) => {
@@ -22,6 +22,42 @@ export function createAiRouter({ clerk, NoteModel, DocumentModel, KnowledgeChunk
       );
 
       return controller.summarize(req, res, next);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post('/suggest-tags', (req, res, next) => {
+    if (!databaseConfigured) {
+      return res.status(503).json({ message: 'Notes storage is not configured on the server yet.' });
+    }
+
+    try {
+      const controller = createTagController(createTagSuggestionService({
+        noteService: createNoteService(NoteModel),
+        documentService: createDocumentService(DocumentModel),
+        aiClient: aiClient || createAiServiceClient(),
+      }));
+
+      return controller.suggest(req, res, next);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post('/documents/:id/suggest-tags', (req, res, next) => {
+    if (!databaseConfigured) {
+      return res.status(503).json({ message: 'Document storage is not configured on the server yet.' });
+    }
+
+    try {
+      const controller = createTagController(createTagSuggestionService({
+        noteService: createNoteService(NoteModel),
+        documentService: createDocumentService(DocumentModel),
+        aiClient: aiClient || createAiServiceClient(),
+      }));
+
+      return controller.suggestDocument(req, res, next);
     } catch (error) {
       return next(error);
     }

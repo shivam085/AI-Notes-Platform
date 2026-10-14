@@ -6,7 +6,7 @@ from app.config import Settings
 from app.main import create_app
 from app.services.pdf_extraction_service import PdfExtractionResult, PdfTextExtractor
 from app.services.text_chunking import TextChunk, TextPage, split_pages_into_chunks
-from app.schemas import IndexChunk, RagAnswer, SemanticSearchRequest, SemanticSearchResult
+from app.schemas import IndexChunk, QuizGenerationResponse, RagAnswer, SemanticSearchRequest, SemanticSearchResult, TagSuggestionResponse
 from app.services.vector_store import QdrantStoreError, QdrantVectorStore
 from qdrant_client import QdrantClient, models
 
@@ -67,6 +67,41 @@ class FakeRagService:
         return RagAnswer(answer="Indexes make repeated lookups faster.", grounded=True)
 
 
+class FakeTagService:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def suggest_tags(self, title: str, text: str) -> list[str]:
+        self.calls.append({"title": title, "text": text})
+        return ["database", "revision", "indexes"]
+
+
+class FakeFlashcardService:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def generate_flashcards(self, title: str, text: str) -> list[dict[str, str]]:
+        self.calls.append({"title": title, "text": text})
+        return [{"question": f"Question {number}", "answer": f"Answer {number}"} for number in range(1, 6)]
+
+
+class FakeQuizService:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def generate_quiz(self, title: str, text: str) -> list[dict]:
+        self.calls.append({"title": title, "text": text})
+        return [
+            {
+                "question": f"Question {number}",
+                "options": ["First", "Second", "Third", "Fourth"],
+                "correct_option_index": number % 4,
+                "explanation": f"Explanation {number}",
+            }
+            for number in range(1, 6)
+        ]
+
+
 def minimal_text_pdf(text: str) -> bytes:
     content = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode()
     objects = [
@@ -101,7 +136,10 @@ class AiServiceTests(unittest.TestCase):
         settings = Settings("not-used-by-this-test", "test-model", "local-test-token")
         self.vector_store = FakeVectorStore()
         self.rag_service = FakeRagService()
-        self.client = TestClient(create_app(settings, FakeSummaryService(), FakePdfExtractor(), FakeEmbeddingService(), self.vector_store, self.rag_service))
+        self.tag_service = FakeTagService()
+        self.flashcard_service = FakeFlashcardService()
+        self.quiz_service = FakeQuizService()
+        self.client = TestClient(create_app(settings, FakeSummaryService(), FakePdfExtractor(), FakeEmbeddingService(), self.vector_store, self.rag_service, self.tag_service, self.flashcard_service, self.quiz_service))
 
     def test_health(self) -> None:
         response = self.client.get("/health")
@@ -120,6 +158,71 @@ class AiServiceTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"summary": "Summary for: A saved note."})
+
+    def test_tag_suggestions_require_internal_token(self) -> None:
+        response = self.client.post(
+            "/internal/suggest-tags",
+            json={"title": "Database revision", "text": "Indexes make lookups faster."},
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_tag_suggestions_return_validated_tags(self) -> None:
+        response = self.client.post(
+            "/internal/suggest-tags",
+            headers={"X-AI-Service-Token": "local-test-token"},
+            json={"title": "Database revision", "text": "Indexes make lookups faster."},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"tags": ["database", "revision", "indexes"]})
+        self.assertEqual(self.tag_service.calls[0]["title"], "Database revision")
+
+    def test_tag_suggestion_schema_normalizes_duplicate_tags(self) -> None:
+        suggestions = TagSuggestionResponse(tags=[" Database ", "database", "Revision", "Study"])
+        self.assertEqual(suggestions.tags, ["database", "revision", "study"])
+
+    def test_flashcard_generation_requires_internal_token(self) -> None:
+        response = self.client.post(
+            "/internal/generate-flashcards",
+            json={"title": "Database revision", "text": "Indexes make lookups faster."},
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_flashcard_generation_returns_five_validated_cards(self) -> None:
+        response = self.client.post(
+            "/internal/generate-flashcards",
+            headers={"X-AI-Service-Token": "local-test-token"},
+            json={"title": "Database revision", "text": "Indexes make lookups faster."},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["cards"]), 5)
+        self.assertEqual(self.flashcard_service.calls[0]["text"], "Indexes make lookups faster.")
+
+    def test_quiz_generation_requires_internal_token(self) -> None:
+        response = self.client.post(
+            "/internal/generate-quiz",
+            json={"title": "Database revision", "text": "Indexes make lookups faster."},
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_quiz_generation_returns_five_validated_questions(self) -> None:
+        response = self.client.post(
+            "/internal/generate-quiz",
+            headers={"X-AI-Service-Token": "local-test-token"},
+            json={"title": "Database revision", "text": "Indexes make lookups faster."},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["questions"]), 5)
+        self.assertEqual(response.json()["questions"][0]["correct_option_index"], 1)
+        self.assertEqual(self.quiz_service.calls[0]["text"], "Indexes make lookups faster.")
+
+    def test_quiz_schema_rejects_duplicate_options(self) -> None:
+        with self.assertRaises(ValueError):
+            QuizGenerationResponse(questions=[{
+                "question": f"Question {number}",
+                "options": ["Same", "Same", "Third", "Fourth"],
+                "correct_option_index": 0,
+                "explanation": "An explanation.",
+            } for number in range(1, 6)])
 
     def test_pdf_extraction_requires_internal_token(self) -> None:
         response = self.client.post("/internal/extract-pdf", json={"source_url": "https://files.example/revision.pdf"})

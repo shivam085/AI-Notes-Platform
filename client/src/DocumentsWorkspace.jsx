@@ -9,6 +9,14 @@ function formatDate(value) {
   return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '';
 }
 
+function tagsToText(tags = []) {
+  return tags.join(', ');
+}
+
+function textToTags(value) {
+  return value.split(',').map((tag) => tag.trim()).filter(Boolean);
+}
+
 export default function DocumentsWorkspace({ getToken }) {
   const [documents, setDocuments] = useState([]);
   const [file, setFile] = useState(null);
@@ -18,6 +26,8 @@ export default function DocumentsWorkspace({ getToken }) {
   const [uploading, setUploading] = useState(false);
   const [workingId, setWorkingId] = useState(null);
   const [extractedText, setExtractedText] = useState(null);
+  const [tagDrafts, setTagDrafts] = useState({});
+  const [tagSuggestions, setTagSuggestions] = useState({});
 
   async function request(path, options = {}) {
     const token = await getToken();
@@ -129,6 +139,43 @@ export default function DocumentsWorkspace({ getToken }) {
     }
   }
 
+  async function suggestDocumentTags(document) {
+    setWorkingId(document._id);
+    setStatus({ type: 'loading', message: 'Generating AI tag suggestions…' });
+    try {
+      const data = await request(`/api/ai/documents/${document._id}/suggest-tags`, { method: 'POST' });
+      setTagSuggestions((current) => ({ ...current, [document._id]: data.tags }));
+      setTagDrafts((current) => ({ ...current, [document._id]: tagsToText(data.tags) }));
+      setStatus({ type: 'success', message: 'AI tag suggestions are ready. Review or edit them, then save the tags.' });
+    } catch (error) {
+      setStatus({ type: 'error', message: error.message });
+    } finally {
+      setWorkingId(null);
+    }
+  }
+
+  async function saveDocumentTags(document) {
+    setWorkingId(document._id);
+    setStatus({ type: 'loading', message: 'Saving document tags…' });
+    try {
+      const data = await request(`/api/documents/${document._id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ tags: textToTags(tagDrafts[document._id] ?? tagsToText(document.tags)) }),
+      });
+      setDocuments((current) => current.map((item) => item._id === document._id ? data.document : item));
+      setTagSuggestions((current) => {
+        const next = { ...current };
+        delete next[document._id];
+        return next;
+      });
+      setStatus({ type: 'success', message: 'Document tags saved.' });
+    } catch (error) {
+      setStatus({ type: 'error', message: error.message });
+    } finally {
+      setWorkingId(null);
+    }
+  }
+
   return (
     <section className="mt-10 rounded-2xl border border-line bg-white p-6">
       <p className="text-sm text-muted">Phases 5–6 — private documents and readable text</p>
@@ -164,15 +211,31 @@ export default function DocumentsWorkspace({ getToken }) {
                 <p className="mt-1 text-sm text-muted">{formatBytes(document.size)} · {document.processingStatus} · Uploaded {formatDate(document.createdAt)}</p>
                 {document.processingStatus === 'ready' && <p className="mt-1 text-xs text-muted">{document.chunkCount} reusable text chunk{document.chunkCount === 1 ? '' : 's'} · Extracted {formatDate(document.processedAt)}</p>}
                 {document.processingStatus === 'failed' && <p className="mt-1 text-xs text-red-800">{document.processingError || 'Text extraction failed. Try again.'}</p>}
-                {(document.folderId || document.tags?.length) && <p className="mt-1 text-xs text-muted">{document.folderId && `Folder: ${document.folderId}`}{document.folderId && document.tags?.length ? ' · ' : ''}{document.tags?.length ? `Tags: ${document.tags.join(', ')}` : ''}</p>}
+                {document.folderId && <p className="mt-1 text-xs text-muted">Folder: {document.folderId}</p>}
               </div>
               <div className="flex flex-wrap gap-2">
                 <button className="rounded-lg border border-forest px-3 py-2 text-sm font-semibold text-forest disabled:opacity-60" type="button" disabled={workingId === document._id} onClick={() => accessDocument(document, 'open')}>Open</button>
                 <button className="rounded-lg border border-forest px-3 py-2 text-sm font-semibold text-forest disabled:opacity-60" type="button" disabled={workingId === document._id} onClick={() => accessDocument(document, 'download')}>Download</button>
                 {['uploaded', 'failed'].includes(document.processingStatus) && <button className="rounded-lg bg-forest px-3 py-2 text-sm font-semibold text-white disabled:opacity-60" type="button" disabled={workingId === document._id} onClick={() => processDocument(document)}>{document.processingStatus === 'failed' ? 'Retry extraction' : 'Extract text'}</button>}
                 {document.processingStatus === 'ready' && <button className="rounded-lg border border-forest px-3 py-2 text-sm font-semibold text-forest disabled:opacity-60" type="button" disabled={workingId === document._id} onClick={() => showExtractedText(document)}>View extracted text</button>}
+                {document.processingStatus === 'ready' && <button className="rounded-lg border border-forest px-3 py-2 text-sm font-semibold text-forest disabled:opacity-60" type="button" disabled={workingId === document._id} onClick={() => suggestDocumentTags(document)}>Suggest tags with AI</button>}
                 <button className="rounded-lg border border-red-700 px-3 py-2 text-sm font-semibold text-red-800 disabled:opacity-60" type="button" disabled={workingId === document._id} onClick={() => deleteDocument(document)}>Delete</button>
               </div>
+            </div>
+            <div className="mt-4 rounded-lg border border-line bg-white p-3">
+              <label className="block text-sm font-medium" htmlFor={`document-tags-${document._id}`}>
+                Tags
+                <input
+                  id={`document-tags-${document._id}`}
+                  value={tagDrafts[document._id] ?? tagsToText(document.tags)}
+                  className="mt-2 w-full rounded-lg border border-line px-3 py-2 text-sm font-normal"
+                  maxLength="318"
+                  placeholder="database, revision"
+                  onChange={(event) => setTagDrafts((current) => ({ ...current, [document._id]: event.target.value }))}
+                />
+              </label>
+              {tagSuggestions[document._id]?.length > 0 && <p className="mt-2 text-xs text-muted">AI suggested: {tagSuggestions[document._id].join(', ')}</p>}
+              <button className="mt-3 rounded-lg border border-forest px-3 py-2 text-sm font-semibold text-forest disabled:opacity-60" type="button" disabled={workingId === document._id} onClick={() => saveDocumentTags(document)}>Save tags</button>
             </div>
           </li>
         ))}

@@ -86,6 +86,17 @@ export function createDocumentService(DocumentModel = Document) {
       if (!document) throw new DocumentNotFoundError();
       return document;
     },
+    async updateTags(ownerId, id, tags) {
+      requireValidId(id);
+      if (!Array.isArray(tags)) throw new DocumentInputError('Tags must be a list.');
+      const document = await DocumentModel.findOneAndUpdate(
+        { _id: id, ownerId },
+        { $set: { tags: normalizeTags(tags) } },
+        { new: true },
+      ).lean();
+      if (!document) throw new DocumentNotFoundError();
+      return document;
+    },
     async remove(ownerId, id) {
       requireValidId(id);
       const document = await DocumentModel.findOneAndDelete({ _id: id, ownerId }).lean();

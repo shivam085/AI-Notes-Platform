@@ -235,6 +235,8 @@ Build in this order:
 
 Ask Gemini for a defined JSON structure, then check that the returned fields and values are valid. For example, a quiz's correct answer must be one of its options.
 
+**Completed — 14 October 2026:** Review-first auto-tagging works for saved private notes and text-ready private PDFs. Express retrieves only the signed-in owner's saved text, sends a bounded request to FastAPI, and the user reviews or edits the 3–5 validated Gemini suggestions before explicitly saving tags. Flashcards and quizzes each generate exactly five items from an owned saved note, then save private study material in MongoDB. FastAPI validates structured JSON, Express rechecks ownership before source text is sent to Gemini, and the study interface supports flashcard review plus local quiz scoring and explanations. The server-to-FastAPI and FastAPI-to-Gemini requests each have a bounded timeout so a slow provider call returns a retryable error. The broader-summary slice was intentionally omitted because the existing Phase 4 note-summary feature already covers that workflow. Verification passed with 37 Node tests, 24 FastAPI tests, the frontend production build, and a successful live Gemini auto-tag response after the provider's temporary HTTP 503 cleared.
+
 React can calculate multiple-choice and true/false scores. For short answers, show a reference answer and let the learner mark their own response; AI grading is not needed.
 
 **Done when:** These features work for notes/documents and the required text selections, saved study sets survive refresh, and bad AI output produces a useful error.
