@@ -30,13 +30,18 @@ function serializeConversation(conversation) {
   };
 }
 
-function serializeMessage(message) {
+function serializeMessage(message, availableSourceIds = null) {
+  const originalSources = message.sources || [];
+  const sources = originalSources.filter((source) => (
+    availableSourceIds === null || availableSourceIds.has(source.sourceId)
+  ));
   return {
     _id: message._id.toString(),
     role: message.role,
     content: message.content,
-    grounded: message.grounded,
-    sources: (message.sources || []).map((source) => ({
+    grounded: Boolean(message.grounded && sources.length),
+    sourceUnavailable: Boolean(message.grounded && originalSources.length && !sources.length),
+    sources: sources.map((source) => ({
       chunkId: source.chunkId,
       sourceType: source.sourceType,
       sourceId: source.sourceId,
@@ -57,7 +62,7 @@ async function findOwnedContext({ ownerId, searchResults, minimumSimilarityScore
   const documentIds = [...new Set(candidateResults.map((result) => result.sourceId))];
   const chunkIds = [...new Set(candidateResults.map((result) => result.chunkId))];
   const [documents, chunks] = await Promise.all([
-    DocumentModel.find({ ownerId, processingStatus: 'ready', _id: { $in: documentIds } }).lean(),
+    DocumentModel.find({ ownerId, deletedAt: null, processingStatus: 'ready', _id: { $in: documentIds } }).lean(),
     KnowledgeChunkModel.find({ ownerId, sourceType: 'document', _id: { $in: chunkIds } }).lean(),
   ]);
   const documentById = new Map(documents.map((document) => [document._id.toString(), document]));
@@ -157,7 +162,15 @@ export function createRagService({
     async get(ownerId, conversationId) {
       const conversation = await getConversation(ownerId, conversationId);
       const messages = await MessageModel.find({ ownerId, conversationId: conversation._id }).sort({ createdAt: 1 }).lean();
-      return { conversation: serializeConversation(conversation), messages: messages.map(serializeMessage) };
+      const sourceIds = [...new Set(messages.flatMap((message) => (message.sources || []).map((source) => source.sourceId)))];
+      const availableDocuments = sourceIds.length
+        ? await DocumentModel.find({ ownerId, deletedAt: null, processingStatus: 'ready', _id: { $in: sourceIds } }).lean()
+        : [];
+      const availableSourceIds = new Set(availableDocuments.map((document) => document._id.toString()));
+      return {
+        conversation: serializeConversation(conversation),
+        messages: messages.map((message) => serializeMessage(message, availableSourceIds)),
+      };
     },
 
     async remove(ownerId, conversationId) {

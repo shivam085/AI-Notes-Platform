@@ -12,11 +12,15 @@
   },
   "scripts": {
     "dev": "concurrently --kill-others --names API,WEB --prefix-colors green,blue \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:all": "concurrently --kill-others --names API,WEB,AI --prefix-colors green,blue,magenta \"npm run dev:server\" \"npm run dev:client\" \"npm run dev:ai\"",
+    "dev:ai": "cd ai-service && .venv\\Scripts\\python.exe -m uvicorn app.main:app --reload",
     "dev:client": "npm run dev --workspace client",
     "dev:server": "npm run dev --workspace server",
     "build": "npm run build --workspace client",
     "preview": "npm run preview --workspace client",
-    "test": "npm run test --workspace server"
+    "test": "npm run test --workspace server",
+    "test:ai": "cd ai-service && .venv\\Scripts\\python.exe -m unittest discover -s tests -v",
+    "verify": "npm test && npm run test:ai && npm run build"
   },
   "devDependencies": {
     "concurrently": "10.0.5"

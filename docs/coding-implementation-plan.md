@@ -1,7 +1,7 @@
 # Your First AI Project: V1 Implementation Plan
 
-**Project:** AI Driven Notes Management Platform  
-**Version:** V1 — a complete personal AI notes application  
+**Project:** AI Driven Notes Management Platform
+**Version:** V1 — a complete personal AI notes application
 **Approach:** Build one small, working feature at a time.
 
 Your first milestone is a notes app where you can sign in, write a note, save it, and reopen it. Then add a **“Summarize this note”** button. Once that works, move on to documents, search, and questions about your notes.
@@ -178,13 +178,15 @@ An **embedding** is a list of numbers that represents aspects of a text's meanin
 
 For example, searching “How can we avoid processes getting stuck?” might find a note about deadlock prevention even without matching those exact words.
 
-- [x] Generate and store a Gemini embedding for each ready PDF chunk.
+- [x] Generate and store a Gemini embedding for each ready document or saved-note chunk.
 - [x] Create a Qdrant collection. Think of this as the vector database setup needed to search those number lists.
 - [x] Turn the search query into an embedding using the same model and vector length.
-- [x] Retrieve relevant PDF chunks, filtering by the authenticated owner's data inside the Qdrant search filter.
-- [x] Show the title, matching text, page, and private source link, with PDF folder/tag filters. Note chunk indexing is a later V1 extension.
+- [x] Retrieve relevant note/document chunks, filtering by the authenticated owner's data inside the Qdrant search filter.
+- [x] Show the title, matching text, page/section where applicable, and private document link, with source-type, folder, and tag filters.
 
 **Implementation note — 8 October 2026; corrected 13 October 2026:** FastAPI uses Gemini's `RETRIEVAL_DOCUMENT` task for stored chunks and `RETRIEVAL_QUERY` for search questions, with a shared 768-dimensional vector size. `QdrantVectorStore` creates an owner-filtered `ai_notes_chunks` collection in Qdrant Cloud. `QDRANT_URL` and `QDRANT_API_KEY` are required in `ai-service/.env`; the former local persistent-mode fallback was removed after the hosted cluster was configured.
+
+**V1 extension — 14 October 2026:** Reindexing now sends saved-note text through the same FastAPI/LangChain recursive splitter, stores versioned note chunks in MongoDB, and indexes them with document chunks in Qdrant. Search rechecks the current owned Note or Document plus its MongoDB chunk; an edited note whose indexed version is stale is hidden until the user reindexes.
 
 Save the embedding model name and vector length with the indexing configuration. A new embedding model can require regenerating stored vectors. When a note changes, update its chunks/embeddings; do not keep showing its old content as current.
 
@@ -245,15 +247,19 @@ React can calculate multiple-choice and true/false scores. For short answers, sh
 
 **Goal:** Finish a complete, usable V1 that you can demonstrate and deploy.
 
+**In progress — started 14 October 2026:** Reliability, safe cleanup, remaining document formats, interface completion, regression tests, and final local setup documentation are active. Docker, Docker Compose, Nginx, HTTPS, and public deployment configuration are deferred at the user's request; Phase 10 will remain In Progress until that deployment work is resumed and verified.
+
 Complete these in separate small tasks:
 
-- [ ] **Recover processing work:** Store pending work in MongoDB so a restart does not lose it. Add bounded retries, status polling, and checks that an older job cannot replace newer content. Use the existing FastAPI service; no new queue infrastructure is needed.
-- [ ] **Handle deletion:** Hide deleted sources immediately, stop old work from restoring them, and clean up files/chunks. Check ownership and source availability before showing saved source-backed AI output.
-- [ ] **Finish the interface:** Landing, dashboard, notes/editor, documents/viewer, search, chat, flashcards, quizzes, and settings. Include useful empty/loading/error states.
-- [ ] **Automate important checks:** Notes CRUD, ownership, private downloads, extraction/chunking, retrieval, missing-context answers, and study tools. Test with two accounts to prove their data stays separate. Add these tests as features grow; run them together here.
+- [x] **Recover processing work:** Store pending work in MongoDB so a restart does not lose it. Add bounded retries, status polling, and checks that an older job cannot replace newer content. Use the existing FastAPI service; no new queue infrastructure is needed.
+- [x] **Handle deletion:** Hide deleted sources immediately, stop old work from restoring them, and clean up files/chunks. Check ownership and source availability before showing saved source-backed AI output.
+- [x] **Finish the interface:** Landing, dashboard, notes/editor, documents/viewer, search, chat, flashcards, quizzes, and settings. Include useful empty/loading/error states.
+- [x] **Automate important checks:** Notes CRUD, ownership, private downloads, extraction/chunking, retrieval, missing-context answers, and study tools. Test with two accounts to prove their data stays separate. Add these tests as features grow; run them together here.
 - [ ] **Add Docker Compose:** Start the applications using the documented environment settings.
 - [ ] **Add Nginx:** Serve React and forward API traffic to Node. Keep FastAPI internal, with server-to-server authentication. Configure HTTPS for public deployment.
-- [ ] **Write the README:** Setup, environment variables, external-service configuration, vector-index setup, API examples, architecture, tests, limitations, and screenshots.
+- [x] **Write the local README:** Setup, environment variables, external-service configuration, vector-index setup, architecture, tests, limitations, and the current local run commands. Add final deployment details and screenshots when deployment resumes.
+
+**Local implementation update — 14 October 2026:** Document processing now stores a run ID and attempt state in MongoDB, retries one temporary extraction failure, and reclaims interrupted work at Express startup. Deletion hides a source first, invalidates old processing, and cleans Cloudinary, MongoDB chunks, and owner-scoped Qdrant vectors. The upload pipeline accepts PDF, DOCX, TXT and Markdown through explicit LangChain loaders. Semantic search now chunks and indexes saved notes as well as ready documents, and rejects stale note versions during the MongoDB ownership recheck. The React app now has a public landing page, workspace dashboard, settings page, multi-format upload states and source-type search filters. `npm.cmd run verify` passed 48 Node tests, 28 FastAPI tests and the production React build.
 
 Start deployment with one Node instance and one FastAPI instance. Document that in-memory request limits need more work before running multiple copies.
 
@@ -261,14 +267,14 @@ Start deployment with one Node instance and one FastAPI instance. Document that 
 
 **V1 completion checklist**
 
-- [ ] Sign-in and private accounts work.
-- [ ] Notes, folders, tags, editing, deletion, and keyword search work.
-- [ ] PDF, DOCX, TXT, and Markdown upload, storage, viewing, processing, retry, and deletion work.
-- [ ] Semantic search works across the user's notes and documents.
-- [ ] Q&A returns valid sources and admits when information is missing.
-- [ ] Summaries, suggested tags, saved flashcards, and saved quizzes work.
-- [ ] Saved notes, chat history, and study material survive refresh/restart.
-- [ ] Account isolation, processing recovery, and important failure cases are tested.
+- [x] Sign-in and private accounts work.
+- [x] Notes, folders, tags, editing, deletion, and keyword search work.
+- [x] PDF, DOCX, TXT, and Markdown upload, storage, viewing, processing, retry, and deletion work.
+- [x] Semantic search works across the user's notes and documents.
+- [x] Q&A returns valid sources and admits when information is missing.
+- [x] Summaries, suggested tags, saved flashcards, and saved quizzes work.
+- [x] Saved notes, chat history, and study material survive refresh/restart.
+- [x] Account isolation, processing recovery, and important failure cases are tested.
 - [ ] Docker, Nginx, deployment, setup instructions, and the README are complete.
 
 When these checks pass, V1 is finished. Use it and gather feedback. Decide separately whether collaboration is worth adding in V2.
@@ -284,7 +290,7 @@ You do not need every model on day one.
 | Extraction/search | `KnowledgeChunk`: source type/ID, owner, text, location, source version, embedding. Use it for both notes and documents. |
 | Chat | `Conversation` and `Message`: history plus the actual sources supplied to AI. |
 | Study tools | `StudySet`: saved cards/quizzes and their source references. |
-| Processing recovery | `ProcessingJob`: pending work, attempts, and which worker currently owns the job. |
+| Processing recovery | `Document` processing fields: current run ID, status, attempts, start time, and deletion claim. |
 
 Agree on field names and ID formats before JavaScript and Python read/write the same collection. Add more advanced processing fields when implementing recovery rather than trying to understand them all before your first note works.
 
@@ -343,3 +349,7 @@ At the start of a phase, mark it In Progress. After its work and checks finish, 
 
 Phases 1 and 2 were completed on 27 and 28 September 2026. Live Clerk sign-in and Express session verification passed. Phases 3–10 are Not Started. The active project folder is `C:\Users\ASUS\OneDrive\Desktop\Notes_ai`. These updates happen as part of project development, not through an unattended monitoring service. Project instructions preserve this workflow for future work in this workspace.
 
+
+## Scope clarification — 17 October 2026
+
+Keep the resume features: Clerk-protected notes with folder/tag fields, private documents, extraction/chunking/embeddings, Qdrant semantic search, RAG Q&A, summaries, AI tags, flashcards, and quizzes. Remove the connection demo and separate landing/settings screens. Share repeated request, study CRUD, Gemini JSON and internal-token logic while retaining MVC, explicit routes, ownership checks, validation, cleanup and regression tests. No new feature or dependency was added. Deployment remains deferred.

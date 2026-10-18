@@ -43,10 +43,10 @@ Open http://127.0.0.1:5173. Vite loads client/.env. The server startup command l
 
 - Visit /workspace while signed out: it should redirect to /sign-in.
 - Select sign-up, create your test account, and complete email verification if requested.
-- You should arrive at /workspace. Click **Verify my session**: Express should return your verified account ID.
+- You should arrive at /workspace. Save or load a note to exercise a real authenticated API request. The old manual session-check panel was removed on 17 October 2026.
 - Reload /workspace: your signed-in session should remain usable.
 - Open the account avatar and sign out. The private workspace should no longer be accessible.
-- Sign back in and verify the session again.
+- Sign back in and confirm your private notes load again.
 - A request to /api/auth/me without a session/token must return 401 once configured. Before server keys are present it returns 503, never a fake account.
 
 Keep the keys local. Do not send them in chat or record them in Notion.
@@ -57,8 +57,8 @@ React → Clerk sign-in → session token → Express Clerk middleware → verif
 
 Authentication asks **who are you?** Authorization asks **may you access this particular resource?** Phase 2 verifies identity. Phase 3 will check ownership of each note. A protected React route improves navigation, but only the backend can protect API data.
 
-- client/src/Root.jsx: setup screen, Clerk provider, sign-in/sign-up routes, protected workspace, account menu and session check.
-- client/src/App.jsx: original Phase 1 connection page, available at /connection.
+- client/src/Root.jsx: setup screen, Clerk provider, sign-in/sign-up routes, protected workspace and account menu.
+- client/src/services/api.js: attaches the current Clerk token to feature requests; the original App.jsx connection demo has been removed.
 - server/src/app.js: health endpoint plus protected GET /api/auth/me.
 - server/test/auth.test.js: real SDK verification using temporary test-only RSA keys. These do not create a Clerk user and cannot authenticate against your Clerk application.
 

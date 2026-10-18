@@ -127,3 +127,34 @@ test('an owner can save, open, list, and delete a private quiz', async (t) => {
   assert.equal(removed.response.status, 204);
   assert.equal(studySetModel.records.length, 0);
 });
+
+
+test('quizzes storage stays usable without AI configuration and isolates owners and set types', async (t) => {
+  const studySetModel = fakeStudySetModel();
+  const aiClient = { generateFlashcards() { assert.fail('Storage must not call Gemini'); }, generateQuiz() { assert.fail('Storage must not call Gemini'); } };
+  const saved = await request(t, '/api/study/quizzes', { method: 'POST', body: JSON.stringify({ noteId: ownedNoteId, questions: questions() }) }, { studySetModel });
+  assert.equal(saved.response.status, 201);
+  const studySet = (await saved.response.json()).studySet;
+  const listed = await request(t, '/api/study/quizzes', {}, { studySetModel });
+  assert.equal(listed.response.status, 200);
+
+  // An owned deck of a different type must not be exposed through this route.
+  studySetModel.records[0].type = 'flashcards';
+  const wrongType = await request(t, '/api/study/quizzes/' + studySet._id, {}, { studySetModel, aiClient });
+  assert.equal(wrongType.response.status, 404);
+
+  studySetModel.records[0].type = 'quiz';
+  studySetModel.records[0].ownerId = 'another_user';
+  const otherOwner = await request(t, '/api/study/quizzes/' + studySet._id, {}, { studySetModel, aiClient });
+  assert.equal(otherOwner.response.status, 404);
+  const deletion = await request(t, '/api/study/quizzes/' + studySet._id, { method: 'DELETE' }, { studySetModel, aiClient });
+  assert.equal(deletion.response.status, 404);
+  assert.equal(studySetModel.records.length, 1);
+});
+
+test('quizzes rejects invalid study material before saving', async (t) => {
+  const studySetModel = fakeStudySetModel();
+  const result = await request(t, '/api/study/quizzes', { method: 'POST', body: JSON.stringify({ noteId: ownedNoteId, questions: [] }) }, { studySetModel });
+  assert.equal(result.response.status, 400);
+  assert.equal(studySetModel.records.length, 0);
+});

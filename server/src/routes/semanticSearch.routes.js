@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { createSemanticSearchController } from '../controllers/index.js';
-import { createSemanticSearchClient, createSemanticSearchService } from '../services/index.js';
+import { createAiServiceClient, createSemanticSearchService } from '../services/index.js';
 
-export function createSemanticSearchRouter({ clerk, DocumentModel, KnowledgeChunkModel, databaseConfigured, semanticSearchClient } = {}) {
+export function createSemanticSearchRouter({ clerk, DocumentModel, KnowledgeChunkModel, NoteModel, databaseConfigured, semanticSearchClient } = {}) {
   const router = Router();
 
   // The browser never supplies an owner ID: Clerk provides it before every indexing or search request.
@@ -17,7 +17,8 @@ export function createSemanticSearchRouter({ clerk, DocumentModel, KnowledgeChun
     return createSemanticSearchController(createSemanticSearchService({
       DocumentModel,
       KnowledgeChunkModel,
-      semanticSearchClient: semanticSearchClient || createSemanticSearchClient(),
+      NoteModel,
+      semanticSearchClient: semanticSearchClient || createAiServiceClient(),
     }));
   }
 

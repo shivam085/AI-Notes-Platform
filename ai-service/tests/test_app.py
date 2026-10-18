@@ -1,13 +1,18 @@
 import unittest
+import json
+from unittest.mock import patch
+from io import BytesIO
+from zipfile import ZipFile
 
 from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from app.services.pdf_extraction_service import PdfExtractionResult, PdfTextExtractor
+from app.services.pdf_extraction_service import DocumentTextExtractor, PdfExtractionResult, PdfTextExtractor
 from app.services.text_chunking import TextChunk, TextPage, split_pages_into_chunks
 from app.schemas import IndexChunk, QuizGenerationResponse, RagAnswer, SemanticSearchRequest, SemanticSearchResult, TagSuggestionResponse
 from app.services.vector_store import QdrantStoreError, QdrantVectorStore
+from app.services.study_service import GeminiStudyError, GeminiStudyService
 from qdrant_client import QdrantClient, models
 
 
@@ -17,7 +22,7 @@ class FakeSummaryService:
 
 
 class FakePdfExtractor:
-    def extract(self, source_url: str) -> PdfExtractionResult:
+    def extract(self, source_url: str, document_format: str = "pdf") -> PdfExtractionResult:
         if source_url == "https://files.example/empty.pdf":
             from app.services.pdf_extraction_service import PdfExtractionError
             raise PdfExtractionError("No selectable text was found. Image-only scanned PDFs are not supported yet.")
@@ -37,6 +42,7 @@ class FakeVectorStore:
     def __init__(self) -> None:
         self.indexed_chunks: list[IndexChunk] = []
         self.search_requests: list[SemanticSearchRequest] = []
+        self.deleted_sources: list[tuple[str, str]] = []
 
     def index_chunks(self, chunks: list[IndexChunk], embedder: FakeEmbeddingService) -> int:
         self.indexed_chunks = chunks
@@ -56,6 +62,9 @@ class FakeVectorStore:
                 score=0.92,
             )
         ]
+
+    def delete_source(self, owner_id: str, source_id: str) -> None:
+        self.deleted_sources.append((owner_id, source_id))
 
 
 class FakeRagService:
@@ -129,6 +138,27 @@ class BytesPdfExtractor(PdfTextExtractor):
 
     def _download_pdf(self, source_url: str) -> bytes:
         return self.pdf_bytes
+
+
+class BytesDocumentExtractor(DocumentTextExtractor):
+    def __init__(self, settings: Settings, document_bytes: bytes):
+        super().__init__(settings)
+        self.document_bytes = document_bytes
+
+    def _download_document(self, source_url: str) -> bytes:
+        return self.document_bytes
+
+
+def minimal_docx(text: str) -> bytes:
+    document_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        f'<w:body><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:body></w:document>'
+    )
+    stream = BytesIO()
+    with ZipFile(stream, "w") as archive:
+        archive.writestr("word/document.xml", document_xml)
+    return stream.getvalue()
 
 
 class AiServiceTests(unittest.TestCase):
@@ -335,6 +365,51 @@ class AiServiceTests(unittest.TestCase):
         self.assertEqual(response.json()["pages"][0]["page_number"], 2)
         self.assertEqual(response.json()["chunks"][0]["position"], 0)
 
+    def test_document_extraction_accepts_txt_and_preserves_a_section_number(self) -> None:
+        response = self.client.post(
+            "/internal/extract-document",
+            headers={"X-AI-Service-Token": "local-test-token"},
+            json={"source_url": "https://files.example/revision.txt", "format": "txt"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["pages"][0]["page_number"], 2)
+
+    def test_saved_note_text_uses_the_shared_langchain_splitter(self) -> None:
+        response = self.client.post(
+            "/internal/split-text",
+            headers={"X-AI-Service-Token": "local-test-token"},
+            json={"text": "database " * 600},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        chunks = response.json()["chunks"]
+        self.assertGreater(len(chunks), 1)
+        self.assertEqual([chunk["position"] for chunk in chunks], list(range(len(chunks))))
+        self.assertTrue(all(chunk["page_number"] == 1 for chunk in chunks))
+
+    def test_real_txt_and_docx_loaders_create_chunks(self) -> None:
+        settings = Settings("not-used-by-this-test", "test-model", "local-test-token")
+        text_result = BytesDocumentExtractor(settings, b"Indexes speed up repeated lookups.").extract(
+            "https://files.example/revision.txt", "txt"
+        )
+        self.assertIn("Indexes speed up", text_result.pages[0].text)
+        self.assertEqual(text_result.chunks[0].page_number, 1)
+
+        docx_result = BytesDocumentExtractor(settings, minimal_docx("Transactions keep data consistent.")).extract(
+            "https://files.example/revision.docx", "docx"
+        )
+        self.assertIn("Transactions keep data consistent", docx_result.pages[0].text)
+
+    def test_vector_deletion_keeps_owner_and_source_together(self) -> None:
+        response = self.client.post(
+            "/internal/delete-source-vectors",
+            headers={"X-AI-Service-Token": "local-test-token"},
+            json={"owner_id": "user-1", "source_id": "document-1"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"deleted": True})
+        self.assertEqual(self.vector_store.deleted_sources, [("user-1", "document-1")])
+
     def test_pdf_extraction_returns_a_clear_scanned_pdf_error(self) -> None:
         response = self.client.post(
             "/internal/extract-pdf",
@@ -418,6 +493,60 @@ class AiServiceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(QdrantStoreError, "Qdrant Cloud is not configured"):
             store._create_client()
+
+
+class SharedStudyServiceTests(unittest.TestCase):
+    def test_each_prompt_uses_its_schema_and_validates_provider_json(self):
+        settings = Settings("test-key", "test-model", "test-token")
+        service = GeminiStudyService(settings)
+        cases = [
+            (service.suggest_tags, {"tags": ["database", "indexes", "revision"]}, "tags"),
+            (service.generate_flashcards, {"cards": FakeFlashcardService().generate_flashcards("", "")}, "cards"),
+            (service.generate_quiz, {"questions": FakeQuizService().generate_quiz("", "")}, "questions"),
+        ]
+        with patch("app.services.study_service.genai.Client") as factory:
+            client = factory.return_value.__enter__.return_value
+            for generate, payload, field in cases:
+                with self.subTest(feature=field):
+                    client.models.generate_content.return_value.text = json.dumps(payload)
+                    result = generate("Indexes", "Indexes speed up repeated lookups.")
+                    self.assertEqual(result, payload[field])
+                    call = client.models.generate_content.call_args.kwargs
+                    self.assertEqual(call["model"], "test-model")
+                    self.assertIn("Indexes speed up repeated lookups.", call["contents"])
+                    self.assertIn("untrusted reference material", call["contents"])
+                    self.assertEqual(call["config"].response_mime_type, "application/json")
+                    self.assertIn(field, call["config"].response_schema.model_fields)
+            self.assertEqual(factory.call_args.kwargs["http_options"].timeout, settings.gemini_request_timeout_ms)
+
+    def test_bad_output_and_provider_failures_return_safe_errors(self):
+        service = GeminiStudyService(Settings("test-key", "test-model", "test-token"))
+        with patch("app.services.study_service.genai.Client") as factory:
+            generate = factory.return_value.__enter__.return_value.models.generate_content
+            for bad_output in ['not json', '{"cards": []}']:
+                generate.return_value.text = bad_output
+                with self.assertRaisesRegex(GeminiStudyError, "invalid study material"):
+                    service.generate_flashcards("Indexes", "Reference text")
+            generate.side_effect = RuntimeError("sensitive provider details")
+            with self.assertRaisesRegex(GeminiStudyError, "could not create study material") as raised:
+                service.generate_quiz("Indexes", "Reference text")
+            self.assertNotIn("sensitive", str(raised.exception))
+
+    def test_all_internal_routes_require_the_shared_token(self):
+        app = create_app(Settings("test-key", "test-model", "test-token"))
+        with TestClient(app) as client:
+            paths = [path for path in app.openapi()["paths"] if path.startswith("/internal/")]
+            self.assertGreater(len(paths), 0)
+            for path in paths:
+                with self.subTest(path=path):
+                    self.assertEqual(client.post(path, json={}).status_code, 401)
+                    self.assertEqual(client.post(path, json={}, headers={"X-AI-Service-Token": "wrong"}).status_code, 401)
+            self.assertEqual(client.get("/health").status_code, 200)
+
+    def test_missing_internal_configuration_fails_closed(self):
+        app = create_app(Settings("test-key", "test-model", None))
+        with TestClient(app) as client:
+            self.assertEqual(client.post("/internal/generate-quiz", json={}).status_code, 503)
 
 
 if __name__ == "__main__":

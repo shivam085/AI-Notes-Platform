@@ -1,3 +1,4 @@
+import { createApiRequest } from './services/api.js';
 import { useEffect, useState } from 'react';
 
 function formatBytes(size) {
@@ -29,26 +30,14 @@ export default function DocumentsWorkspace({ getToken }) {
   const [tagDrafts, setTagDrafts] = useState({});
   const [tagSuggestions, setTagSuggestions] = useState({});
 
-  async function request(path, options = {}) {
-    const token = await getToken();
-    if (!token) throw new Error('Your session ended. Please sign in again.');
+  const request = createApiRequest(getToken);
 
-    const headers = { Accept: 'application/json', Authorization: `Bearer ${token}`, ...options.headers };
-    if (options.body && !(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
-
-    const response = await fetch(path, { ...options, headers });
-    if (response.status === 204) return null;
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.message || 'The request could not be completed.');
-    return data;
-  }
-
-  async function loadDocuments() {
-    setStatus({ type: 'loading', message: 'Loading your documents…' });
+  async function loadDocuments(quiet = false) {
+    if (!quiet) setStatus({ type: 'loading', message: 'Loading your documents…' });
     try {
       const data = await request('/api/documents');
       setDocuments(data.documents);
-      setStatus({ type: 'success', message: data.documents.length ? `${data.documents.length} document${data.documents.length === 1 ? '' : 's'} saved privately.` : 'No documents yet. Upload your first PDF.' });
+      if (!quiet) setStatus({ type: 'success', message: data.documents.length ? `${data.documents.length} document${data.documents.length === 1 ? '' : 's'} saved privately.` : 'No documents yet. Upload your first study file.' });
     } catch (error) {
       setStatus({ type: 'error', message: error.message });
     }
@@ -56,10 +45,16 @@ export default function DocumentsWorkspace({ getToken }) {
 
   useEffect(() => { loadDocuments(); }, []);
 
+  useEffect(() => {
+    if (!documents.some((document) => document.processingStatus === 'processing')) return undefined;
+    const pollId = window.setInterval(() => loadDocuments(true), 2000);
+    return () => window.clearInterval(pollId);
+  }, [documents]);
+
   async function uploadDocument(event) {
     event.preventDefault();
     if (!file) {
-      setStatus({ type: 'error', message: 'Choose a PDF file before uploading.' });
+      setStatus({ type: 'error', message: 'Choose a PDF, DOCX, TXT, or Markdown file before uploading.' });
       return;
     }
 
@@ -75,7 +70,7 @@ export default function DocumentsWorkspace({ getToken }) {
       setFolderId('');
       setTags('');
       event.currentTarget.reset();
-      setStatus({ type: 'success', message: 'PDF uploaded privately. Select Extract text when you are ready.' });
+      setStatus({ type: 'success', message: 'Document uploaded privately. Select Extract text when you are ready.' });
     } catch (error) {
       setStatus({ type: 'error', message: error.message });
     } finally {
@@ -88,7 +83,7 @@ export default function DocumentsWorkspace({ getToken }) {
     try {
       const data = await request(`/api/documents/${document._id}/${action}`);
       window.open(data.url, '_blank', 'noopener,noreferrer');
-      setStatus({ type: 'success', message: action === 'open' ? 'Opening your private PDF…' : 'Starting your private download…' });
+      setStatus({ type: 'success', message: action === 'open' ? 'Opening your private document…' : 'Starting your private download…' });
     } catch (error) {
       setStatus({ type: 'error', message: error.message });
     } finally {
@@ -178,14 +173,14 @@ export default function DocumentsWorkspace({ getToken }) {
 
   return (
     <section className="mt-10 rounded-2xl border border-line bg-white p-6">
-      <p className="text-sm text-muted">Phases 5–6 — private documents and readable text</p>
-      <h2 className="mt-2 font-display text-3xl">Upload a PDF</h2>
-      <p className="mt-3 max-w-3xl text-muted">Your file is checked by the server, stored privately, and linked only to your account. Extracted text keeps its original page number so you can inspect what later AI features will use.</p>
+      <p className="text-sm text-muted">Phases 5–10 — private documents and readable text</p>
+      <h2 className="mt-2 font-display text-3xl">Upload study documents</h2>
+      <p className="mt-3 max-w-3xl text-muted">PDF, DOCX, TXT, and Markdown files are checked by the server, stored privately, and linked only to your account. Extracted text keeps a page or section number so you can inspect what later AI features use.</p>
 
       <form className="mt-6 grid gap-4" onSubmit={uploadDocument}>
         <label className="block font-medium" htmlFor="document-file">
-          PDF file (maximum 10 MB)
-          <input id="document-file" type="file" accept="application/pdf,.pdf" required className="mt-2 block w-full rounded-lg border border-line p-2 text-sm font-normal" onChange={(event) => setFile(event.target.files?.[0] || null)} />
+          PDF, DOCX, TXT, or Markdown file (maximum 10 MB)
+          <input id="document-file" type="file" accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,text/plain,.txt,text/markdown,.md,.markdown" required className="mt-2 block w-full rounded-lg border border-line p-2 text-sm font-normal" onChange={(event) => setFile(event.target.files?.[0] || null)} />
         </label>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block font-medium" htmlFor="document-folder">
@@ -197,7 +192,7 @@ export default function DocumentsWorkspace({ getToken }) {
             <input id="document-tags" value={tags} className="mt-2 w-full rounded-lg border border-line px-3 py-2 font-normal" placeholder="database, revision" onChange={(event) => setTags(event.target.value)} />
           </label>
         </div>
-        <div><button className="rounded-xl bg-forest px-5 py-3 text-sm font-semibold text-white disabled:opacity-60" type="submit" disabled={uploading}>{uploading ? 'Uploading…' : 'Upload PDF'}</button></div>
+        <div><button className="rounded-xl bg-forest px-5 py-3 text-sm font-semibold text-white disabled:opacity-60" type="submit" disabled={uploading}>{uploading ? 'Uploading…' : 'Upload document'}</button></div>
       </form>
 
       <div role="status" className={`mt-6 rounded-lg p-3 text-sm ${status.type === 'error' ? 'bg-red-50 text-red-800' : 'bg-sage text-forest'}`}>{status.message}</div>
@@ -208,7 +203,8 @@ export default function DocumentsWorkspace({ getToken }) {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h3 className="font-semibold">{document.originalName}</h3>
-                <p className="mt-1 text-sm text-muted">{formatBytes(document.size)} · {document.processingStatus} · Uploaded {formatDate(document.createdAt)}</p>
+                <p className="mt-1 text-sm text-muted">{document.format.toUpperCase()} · {formatBytes(document.size)} · {document.processingStatus} · Uploaded {formatDate(document.createdAt)}</p>
+                {document.processingStatus === 'processing' && <p className="mt-1 text-xs text-muted">Processing is running. This page checks the saved status every two seconds and can recover after an API restart.</p>}
                 {document.processingStatus === 'ready' && <p className="mt-1 text-xs text-muted">{document.chunkCount} reusable text chunk{document.chunkCount === 1 ? '' : 's'} · Extracted {formatDate(document.processedAt)}</p>}
                 {document.processingStatus === 'failed' && <p className="mt-1 text-xs text-red-800">{document.processingError || 'Text extraction failed. Try again.'}</p>}
                 {document.folderId && <p className="mt-1 text-xs text-muted">Folder: {document.folderId}</p>}
@@ -253,7 +249,7 @@ export default function DocumentsWorkspace({ getToken }) {
           <div className="mt-4 max-h-96 space-y-4 overflow-y-auto rounded-lg bg-white p-4">
             {extractedText.pages.map((page) => (
               <article key={page.pageNumber}>
-                <h4 className="text-sm font-semibold text-forest">Page {page.pageNumber}</h4>
+                <h4 className="text-sm font-semibold text-forest">Page/section {page.pageNumber}</h4>
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink">{page.text}</p>
               </article>
             ))}

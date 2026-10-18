@@ -20,8 +20,7 @@ export function createCloudinaryDocumentStorage({ configuration = readConfigurat
 
   cloudinaryInstance.config({ cloud_name: cloudName, api_key: apiKey, api_secret: apiSecret, secure: true });
 
-  return {
-    async uploadPdf({ buffer, ownerId, originalName }) {
+  async function uploadDocument({ buffer, ownerId, originalName }) {
       const result = await new Promise((resolve, reject) => {
         const stream = cloudinaryInstance.uploader.upload_stream({
           resource_type: 'raw',
@@ -31,22 +30,27 @@ export function createCloudinaryDocumentStorage({ configuration = readConfigurat
           filename_override: originalName,
           overwrite: false,
         }, (error, response) => {
-          if (error) return reject(new DocumentStorageError('Cloud storage could not save this PDF.'));
+          if (error) return reject(new DocumentStorageError('Cloud storage could not save this document.'));
           return resolve(response);
         });
         stream.end(buffer);
       });
 
-      if (!result?.public_id) throw new DocumentStorageError('Cloud storage did not return a file identifier.');
+      if (!result?.public_id) throw new DocumentStorageError('Cloud storage did not return a document identifier.');
       return { publicId: result.public_id };
-    },
+  }
+
+  return {
+    uploadDocument,
+    // Compatibility helper for the original PDF-only upload flow.
+    uploadPdf: uploadDocument,
     async remove(publicId) {
       try {
         const result = await cloudinaryInstance.uploader.destroy(publicId, { resource_type: 'raw', type: 'private', invalidate: true });
-        if (!['ok', 'not found'].includes(result?.result)) throw new DocumentStorageError('Cloud storage could not delete this PDF.');
+        if (!['ok', 'not found'].includes(result?.result)) throw new DocumentStorageError('Cloud storage could not delete this document.');
       } catch (error) {
         if (error instanceof DocumentStorageError) throw error;
-        throw new DocumentStorageError('Cloud storage could not delete this PDF.');
+        throw new DocumentStorageError('Cloud storage could not delete this document.');
       }
     },
     createAccessUrl({ publicId, format, download }) {

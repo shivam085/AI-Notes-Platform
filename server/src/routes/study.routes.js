@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { createFlashcardsController, createQuizController } from '../controllers/index.js';
-import { createAiServiceClient, createFlashcardService, createNoteService, createQuizService } from '../services/index.js';
+import { createStudyController } from '../controllers/index.js';
+import { createAiServiceClient, createNoteService, createStudyService } from '../services/index.js';
 
 export function createStudyRouter({ clerk, NoteModel, StudySetModel, databaseConfigured, aiClient } = {}) {
   const router = Router();
@@ -11,33 +11,31 @@ export function createStudyRouter({ clerk, NoteModel, StudySetModel, databaseCon
     return next();
   });
 
-  function flashcardsController() {
-    return createFlashcardsController(createFlashcardService({
-      noteService: createNoteService(NoteModel),
-      StudySetModel,
-      aiClient: aiClient || createAiServiceClient(),
-    }));
-  }
+  const dependencies = {
+    noteService: createNoteService(NoteModel),
+    StudySetModel,
+    getAiClient: () => aiClient || createAiServiceClient(),
+  };
+  const flashcards = createStudyController(
+    createStudyService({ ...dependencies, type: 'flashcards' }),
+    'Flashcard set or source note not found.',
+  );
+  const quizzes = createStudyController(
+    createStudyService({ ...dependencies, type: 'quiz' }),
+    'Quiz or source note not found.',
+  );
 
-  function quizController() {
-    return createQuizController(createQuizService({
-      noteService: createNoteService(NoteModel),
-      StudySetModel,
-      aiClient: aiClient || createAiServiceClient(),
-    }));
-  }
+  router.post('/flashcards/generate', flashcards.generate);
+  router.post('/flashcards', flashcards.save);
+  router.get('/flashcards', flashcards.list);
+  router.get('/flashcards/:id', flashcards.get);
+  router.delete('/flashcards/:id', flashcards.remove);
 
-  router.post('/flashcards/generate', (req, res, next) => flashcardsController().generate(req, res, next));
-  router.post('/flashcards', (req, res, next) => flashcardsController().save(req, res, next));
-  router.get('/flashcards', (req, res, next) => flashcardsController().list(req, res, next));
-  router.get('/flashcards/:id', (req, res, next) => flashcardsController().get(req, res, next));
-  router.delete('/flashcards/:id', (req, res, next) => flashcardsController().remove(req, res, next));
-
-  router.post('/quizzes/generate', (req, res, next) => quizController().generate(req, res, next));
-  router.post('/quizzes', (req, res, next) => quizController().save(req, res, next));
-  router.get('/quizzes', (req, res, next) => quizController().list(req, res, next));
-  router.get('/quizzes/:id', (req, res, next) => quizController().get(req, res, next));
-  router.delete('/quizzes/:id', (req, res, next) => quizController().remove(req, res, next));
+  router.post('/quizzes/generate', quizzes.generate);
+  router.post('/quizzes', quizzes.save);
+  router.get('/quizzes', quizzes.list);
+  router.get('/quizzes/:id', quizzes.get);
+  router.delete('/quizzes/:id', quizzes.remove);
 
   return router;
 }

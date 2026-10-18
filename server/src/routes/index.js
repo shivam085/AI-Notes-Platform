@@ -14,8 +14,8 @@ export function createApiRouter({ clerk, NoteModel, DocumentModel, KnowledgeChun
   router.use('/auth', createAuthRouter({ clerk }));
   router.use('/notes', createNotesRouter({ clerk, NoteModel, databaseConfigured }));
   router.use('/ai', createAiRouter({ clerk, NoteModel, DocumentModel, KnowledgeChunkModel, ConversationModel, MessageModel, databaseConfigured, aiClient, semanticSearchClient, ragClient }));
-  router.use('/documents', createDocumentsRouter({ clerk, DocumentModel, KnowledgeChunkModel, databaseConfigured, documentStorage, documentExtractionClient, storageConfigured: cloudinaryConfigured }));
-  router.use('/search', createSemanticSearchRouter({ clerk, DocumentModel, KnowledgeChunkModel, databaseConfigured, semanticSearchClient }));
+  router.use('/documents', createDocumentsRouter({ clerk, DocumentModel, KnowledgeChunkModel, databaseConfigured, documentStorage, documentExtractionClient, semanticSearchClient, storageConfigured: cloudinaryConfigured }));
+  router.use('/search', createSemanticSearchRouter({ clerk, NoteModel, DocumentModel, KnowledgeChunkModel, databaseConfigured, semanticSearchClient }));
   router.use('/study', createStudyRouter({ clerk, NoteModel, StudySetModel, databaseConfigured, aiClient }));
 
   return router;

@@ -1,3 +1,4 @@
+import { createApiRequest } from './services/api.js';
 import { useEffect, useState } from 'react';
 
 export default function RagChat({ getToken }) {
@@ -11,17 +12,7 @@ export default function RagChat({ getToken }) {
   const [deletingId, setDeletingId] = useState(null);
   const [openingId, setOpeningId] = useState(null);
 
-  async function request(path, options = {}) {
-    const token = await getToken();
-    if (!token) throw new Error('Your session ended. Please sign in again.');
-    const response = await fetch(path, {
-      ...options,
-      headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, ...options.headers },
-    });
-    const data = response.status === 204 ? null : await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data?.message || 'The request could not be completed.');
-    return data;
-  }
+  const request = createApiRequest(getToken);
 
   async function loadConversations() {
     try {
@@ -115,7 +106,7 @@ export default function RagChat({ getToken }) {
     <section className="mt-10 rounded-2xl border border-line bg-white p-6">
       <p className="text-sm text-muted">Phase 8 — grounded RAG Q&amp;A</p>
       <h2 className="mt-2 font-display text-3xl">Ask your documents</h2>
-      <p className="mt-3 max-w-3xl text-muted">Your question retrieves related private chunks first. Gemini receives only that focused context and the app shows the real PDF pages used as sources.</p>
+      <p className="mt-3 max-w-3xl text-muted">Your question retrieves related private chunks first. Gemini receives only that focused context and the app shows the real document sections used as sources.</p>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
         <aside className="rounded-xl border border-line bg-paper p-4">
@@ -141,20 +132,21 @@ export default function RagChat({ getToken }) {
 
         <div>
           <div className="space-y-4" aria-live="polite">
-            {messages.length === 0 && <p className="rounded-xl bg-paper p-4 text-sm text-muted">Ask about an indexed PDF. If your documents do not contain enough evidence, the assistant will say so instead of guessing.</p>}
+            {messages.length === 0 && <p className="rounded-xl bg-paper p-4 text-sm text-muted">Ask about an indexed document. If your documents do not contain enough evidence, the assistant will say so instead of guessing.</p>}
             {messages.map((message) => (
               <article className={`rounded-xl border p-4 ${message.role === 'user' ? 'border-line bg-paper' : 'border-sage bg-white'}`} key={message._id}>
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted">{message.role === 'user' ? 'You' : 'Document answer'}</p>
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink">{message.content}</p>
+                {message.sourceUnavailable && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">The document used for this saved answer has since been deleted, so its source link is no longer available.</p>}
                 {message.role === 'assistant' && message.sources?.length > 0 && (
                   <div className="mt-4 border-t border-line pt-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted">Sources retrieved for this answer</p>
                     <ul className="mt-2 space-y-2">
                       {message.sources.map((source) => (
                         <li className="flex flex-wrap items-center justify-between gap-2 text-sm" key={source.chunkId}>
-                          <span className="text-muted">{source.title} · page {source.pageNumber || 'unknown'} · chunk {source.position + 1}</span>
+                          <span className="text-muted">{source.title} · section {source.pageNumber || 'unknown'} · chunk {source.position + 1}</span>
                           <button className="font-semibold text-forest underline underline-offset-4 disabled:opacity-60" type="button" onClick={() => openDocument(source)} disabled={openingId === source.sourceId}>
-                            {openingId === source.sourceId ? 'Opening…' : 'Open PDF'}
+                            {openingId === source.sourceId ? 'Opening…' : 'Open document'}
                           </button>
                         </li>
                       ))}
@@ -167,7 +159,7 @@ export default function RagChat({ getToken }) {
 
           <form className="mt-5" onSubmit={askQuestion}>
             <label className="block font-medium" htmlFor="rag-question">
-              Ask a question about your indexed PDFs
+              Ask a question about your indexed documents
               <textarea id="rag-question" value={question} maxLength="2000" rows="4" className="mt-2 w-full rounded-lg border border-line px-3 py-2 font-normal" placeholder="How did communication technologies change society?" onChange={(event) => setQuestion(event.target.value)} />
             </label>
             <button className="mt-3 rounded-xl bg-forest px-5 py-3 text-sm font-semibold text-white disabled:opacity-60" type="submit" disabled={asking || loadingConversation}>

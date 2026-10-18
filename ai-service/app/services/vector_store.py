@@ -102,6 +102,19 @@ class QdrantVectorStore:
         except Exception as error:
             raise QdrantStoreError("Qdrant could not search the extracted text.") from error
 
+    def delete_source(self, owner_id: str, source_id: str) -> None:
+        try:
+            self._ensure_collection()
+            self._get_client().delete(
+                collection_name=self.settings.qdrant_collection,
+                points_selector=self._source_filter(owner_id, source_id),
+                wait=True,
+            )
+        except QdrantStoreError:
+            raise
+        except Exception as error:
+            raise QdrantStoreError("Qdrant could not delete this document's vectors.") from error
+
     def _ensure_collection(self) -> None:
         if self.collection_ready:
             return

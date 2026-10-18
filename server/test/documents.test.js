@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { test } from 'node:test';
 import { createApp } from '../src/app.js';
-import { validatePdfUpload } from '../src/services/documentService.js';
+import { validateDocumentUpload, validatePdfUpload } from '../src/services/documentService.js';
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const origin = 'http://127.0.0.1:5173';
@@ -19,12 +19,21 @@ function token() {
 }
 
 function fakeDocumentModel() {
-  const records = [{ _id: '507f191e810c19729de860ea', ownerId: 'another_user', originalName: 'private.pdf', format: 'pdf', mimeType: 'application/pdf', size: 100, cloudinaryPublicId: 'private-id', processingStatus: 'uploaded', tags: [], folderId: null }];
-  const matching = (filter) => records.filter((document) => Object.entries(filter).every(([key, value]) => document[key] === value));
+  const records = [{ _id: '507f191e810c19729de860ea', ownerId: 'another_user', originalName: 'private.pdf', format: 'pdf', mimeType: 'application/pdf', size: 100, cloudinaryPublicId: 'private-id', processingStatus: 'uploaded', processingAttempts: 0, deletedAt: null, tags: [], folderId: null }];
+  const matchesValue = (actual, expected) => {
+    if (expected === null) return actual == null;
+    if (expected && typeof expected === 'object') {
+      if ('$in' in expected) return expected.$in.includes(actual);
+      if ('$lt' in expected) return actual < expected.$lt;
+      if ('$ne' in expected) return actual !== expected.$ne;
+    }
+    return actual === expected;
+  };
+  const matching = (filter) => records.filter((document) => Object.entries(filter).every(([key, value]) => matchesValue(document[key], value)));
   const query = (value) => ({ lean: async () => value });
   return {
     async create(data) {
-      const document = { _id: documentId, ...data, processingStatus: 'uploaded', createdAt: new Date(), updatedAt: new Date() };
+      const document = { _id: documentId, ...data, processingStatus: 'uploaded', processingAttempts: 0, deletedAt: null, createdAt: new Date(), updatedAt: new Date() };
       records.push(document);
       return document;
     },
@@ -37,7 +46,10 @@ function fakeDocumentModel() {
     },
     findOneAndUpdate(filter, update) {
       const document = matching(filter)[0];
-      if (document) Object.assign(document, update.$set);
+      if (document) {
+        Object.assign(document, update.$set);
+        for (const [key, value] of Object.entries(update.$inc || {})) document[key] = (document[key] || 0) + value;
+      }
       return query(document || null);
     },
   };
@@ -61,13 +73,14 @@ function fakeStorage() {
   return {
     uploaded,
     removed,
-    async uploadPdf(file) { uploaded.push(file); return { publicId: 'owner-file-id' }; },
+    async uploadDocument(file) { uploaded.push(file); return { publicId: 'owner-file-id' }; },
+    async uploadPdf(file) { return this.uploadDocument(file); },
     async remove(publicId) { removed.push(publicId); },
     createAccessUrl({ publicId, download }) { return `https://storage.example/${publicId}?download=${download}`; },
   };
 }
 
-async function request(t, path, options = {}, documentModel = fakeDocumentModel(), documentStorage = fakeStorage(), knowledgeChunkModel = fakeKnowledgeChunkModel(), documentExtractionClient) {
+async function request(t, path, options = {}, documentModel = fakeDocumentModel(), documentStorage = fakeStorage(), knowledgeChunkModel = fakeKnowledgeChunkModel(), documentExtractionClient, semanticSearchClient) {
   const app = createApp({
     configured: true,
     databaseConfigured: true,
@@ -76,6 +89,7 @@ async function request(t, path, options = {}, documentModel = fakeDocumentModel(
     knowledgeChunkModel,
     documentStorage,
     documentExtractionClient,
+    semanticSearchClient,
     clerkOptions: { secretKey: 'sk_test_not_a_real_key_for_offline_tests', publishableKey, jwtKey: publicKey.export({ type: 'spki', format: 'pem' }), authorizedParties: [origin] },
   });
   const server = await new Promise((resolve) => { const running = app.listen(0, '127.0.0.1', () => resolve(running)); });
@@ -86,6 +100,15 @@ async function request(t, path, options = {}, documentModel = fakeDocumentModel(
 
 test('PDF validation rejects a renamed non-PDF file', () => {
   assert.throws(() => validatePdfUpload({ originalname: 'not-a-pdf.pdf', mimetype: 'application/pdf', size: 12, buffer: Buffer.from('not a document') }));
+});
+
+test('document validation accepts UTF-8 text and rejects unsupported files', () => {
+  const text = Buffer.from('Indexes speed up repeated lookups.');
+  assert.deepEqual(
+    validateDocumentUpload({ originalname: 'revision.md', mimetype: 'text/markdown', size: text.length, buffer: text }),
+    { originalName: 'revision.md', format: 'md', mimeType: 'text/markdown', size: text.length },
+  );
+  assert.throws(() => validateDocumentUpload({ originalname: 'image.png', mimetype: 'image/png', size: 4, buffer: Buffer.from('test') }));
 });
 
 test('a verified user can upload and list their own PDF', async (t) => {
@@ -104,6 +127,33 @@ test('a verified user can upload and list their own PDF', async (t) => {
   assert.equal(listed.status, 200);
   assert.deepEqual(data.documents.map((document) => document.originalName), ['revision.pdf']);
   assert.equal(data.documents[0].cloudinaryPublicId, undefined);
+});
+
+test('a verified user can upload and process a UTF-8 text document', async (t) => {
+  const documentModel = fakeDocumentModel();
+  const storage = fakeStorage();
+  const chunkModel = fakeKnowledgeChunkModel();
+  const extractor = {
+    async extractDocument(url, format) {
+      assert.match(url, /^https:\/\/storage\.example\/owner-file-id/);
+      assert.equal(format, 'txt');
+      return {
+        pages: [{ pageNumber: 1, text: 'Transactions keep database updates consistent.' }],
+        chunks: [{ position: 0, pageNumber: 1, text: 'Transactions keep database updates consistent.' }],
+      };
+    },
+  };
+  const body = new FormData();
+  body.append('document', new Blob([Buffer.from('Transactions keep database updates consistent.')], { type: 'text/plain' }), 'revision.txt');
+
+  const { response: uploaded } = await request(t, '/api/documents', { method: 'POST', body }, documentModel, storage, chunkModel, extractor);
+  assert.equal(uploaded.status, 201);
+  assert.equal((await uploaded.json()).document.format, 'txt');
+
+  const { response: processed } = await request(t, `/api/documents/${documentId}/process`, { method: 'POST' }, documentModel, storage, chunkModel, extractor);
+  assert.equal(processed.status, 200);
+  assert.equal((await processed.json()).document.processingStatus, 'ready');
+  assert.equal(chunkModel.records.length, 1);
 });
 
 test('an owner receives a short-lived access link and another account document is hidden', async (t) => {
@@ -163,8 +213,9 @@ test('an owner can extract page-aware text and cannot process a ready document a
   const storage = fakeStorage();
   const chunkModel = fakeKnowledgeChunkModel();
   const extractor = {
-    async extractPdf(url) {
+    async extractDocument(url, format) {
       assert.match(url, /^https:\/\/storage\.example\/owner-file-id/);
+      assert.equal(format, 'pdf');
       return {
         pages: [{ pageNumber: 1, text: 'Indexes speed up repeated database lookups.' }],
         chunks: [{ position: 0, pageNumber: 1, text: 'Indexes speed up repeated database lookups.' }],
@@ -186,4 +237,27 @@ test('an owner can extract page-aware text and cannot process a ready document a
 
   const { response: repeated } = await request(t, `/api/documents/${documentId}/retry`, { method: 'POST' }, documentModel, storage, chunkModel, extractor);
   assert.equal(repeated.status, 409);
+});
+
+test('deleting a document removes storage, chunks, and owner-scoped vectors', async (t) => {
+  const documentModel = fakeDocumentModel();
+  const storage = fakeStorage();
+  const chunkModel = fakeKnowledgeChunkModel();
+  const deletedVectors = [];
+  const semanticSearchClient = {
+    async deleteSource(ownerId, sourceId) { deletedVectors.push({ ownerId, sourceId }); },
+  };
+  const body = new FormData();
+  body.append('document', new Blob([Buffer.from('%PDF-1.7\nexample')], { type: 'application/pdf' }), 'revision.pdf');
+  await request(t, '/api/documents', { method: 'POST', body }, documentModel, storage, chunkModel, undefined, semanticSearchClient);
+  chunkModel.records.push({ ownerId: 'user_verified', sourceType: 'document', sourceId: documentId, position: 0, pageNumber: 1, text: 'Example.' });
+
+  const { response: removed } = await request(t, `/api/documents/${documentId}`, { method: 'DELETE' }, documentModel, storage, chunkModel, undefined, semanticSearchClient);
+  assert.equal(removed.status, 204);
+  assert.deepEqual(storage.removed, ['owner-file-id']);
+  assert.equal(chunkModel.records.length, 0);
+  assert.deepEqual(deletedVectors, [{ ownerId: 'user_verified', sourceId: documentId }]);
+
+  const { response: listed } = await request(t, '/api/documents', {}, documentModel, storage, chunkModel, undefined, semanticSearchClient);
+  assert.deepEqual((await listed.json()).documents, []);
 });

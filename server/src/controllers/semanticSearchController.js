@@ -1,12 +1,12 @@
 import { getAuth } from '@clerk/express';
-import { SemanticSearchConfigurationError, SemanticSearchUnavailableError } from '../services/semanticSearchClient.js';
+import { AiServiceConfigurationError, AiServiceUnavailableError } from '../services/aiServiceClient.js';
 import { SemanticSearchInputError } from '../services/semanticSearchService.js';
 
 export function createSemanticSearchController(semanticSearchService) {
   function ownerIdFromRequest(req, res) {
     const { userId } = getAuth(req);
     if (!userId) {
-      res.status(401).json({ message: 'Sign in to search your documents.' });
+      res.status(401).json({ message: 'Sign in to search your notes and documents.' });
       return null;
     }
     return userId;
@@ -14,8 +14,8 @@ export function createSemanticSearchController(semanticSearchService) {
 
   function respondToError(error, res, next) {
     if (error instanceof SemanticSearchInputError) return res.status(400).json({ message: error.message });
-    if (error instanceof SemanticSearchConfigurationError) return res.status(503).json({ message: error.message });
-    if (error instanceof SemanticSearchUnavailableError) return res.status(502).json({ message: error.message });
+    if (error instanceof AiServiceConfigurationError) return res.status(503).json({ message: error.message });
+    if (error instanceof AiServiceUnavailableError) return res.status(502).json({ message: error.message });
     return next(error);
   }
 

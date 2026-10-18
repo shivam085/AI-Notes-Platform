@@ -2,21 +2,29 @@ import multer from 'multer';
 import { Router } from 'express';
 import { createDocumentsController } from '../controllers/index.js';
 import { Document, KnowledgeChunk } from '../models/index.js';
-import { createCloudinaryDocumentStorage, createDocumentExtractionClient, createDocumentProcessingService, createDocumentService, createKnowledgeChunkService, validatePdfUpload } from '../services/index.js';
+import {
+  createCloudinaryDocumentStorage,
+  createDocumentCleanupService,
+  createAiServiceClient,
+  createDocumentProcessingService,
+  createDocumentService,
+  createKnowledgeChunkService,
+  validateDocumentUpload,
+} from '../services/index.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
 
-function singlePdfUpload(req, res, next) {
+function singleDocumentUpload(req, res, next) {
   upload.single('document')(req, res, (error) => {
     if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ message: 'PDF files must be 10 MB or smaller.' });
+      return res.status(400).json({ message: 'Documents must be 10 MB or smaller.' });
     }
     if (error) return next(error);
     return next();
   });
 }
 
-export function createDocumentsRouter({ clerk, DocumentModel = Document, KnowledgeChunkModel = KnowledgeChunk, databaseConfigured = Boolean(process.env.MONGODB_URI), storageConfigured = Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET), documentStorage, documentExtractionClient } = {}) {
+export function createDocumentsRouter({ clerk, DocumentModel = Document, KnowledgeChunkModel = KnowledgeChunk, databaseConfigured = Boolean(process.env.MONGODB_URI), storageConfigured = Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET), documentStorage, documentExtractionClient, semanticSearchClient } = {}) {
   const router = Router();
 
   // All document operations require a verified Clerk identity.
@@ -31,22 +39,29 @@ export function createDocumentsRouter({ clerk, DocumentModel = Document, Knowled
   const service = createDocumentService(DocumentModel);
   const knowledgeChunkService = createKnowledgeChunkService(KnowledgeChunkModel);
   const storage = documentStorage || (storageConfigured ? createCloudinaryDocumentStorage() : null);
+  const getSemanticSearchClient = () => semanticSearchClient || createAiServiceClient();
+  const documentProcessingService = createDocumentProcessingService({
+    documentService: service,
+    documentStorage: storage,
+    knowledgeChunkService,
+    // Read AI configuration only when a user starts processing. Upload/list/open remain available without it.
+    getExtractionClient: () => documentExtractionClient || createAiServiceClient(),
+  });
   const controller = createDocumentsController({
-    documentService: { ...service, validateUpload: validatePdfUpload },
+    documentService: { ...service, validateUpload: validateDocumentUpload },
     // Do not construct Cloudinary's client until its environment settings exist.
     // The middleware above returns the useful setup response when they are absent.
     documentStorage: storage,
-    knowledgeChunkService,
-    documentProcessingService: createDocumentProcessingService({
+    documentProcessingService,
+    documentCleanupService: createDocumentCleanupService({
       documentService: service,
       documentStorage: storage,
       knowledgeChunkService,
-      // Read AI configuration only when a user starts processing. Upload/list/open remain available without it.
-      getExtractionClient: () => documentExtractionClient || createDocumentExtractionClient(),
+      getSemanticSearchClient,
     }),
   });
 
-  router.post('/', singlePdfUpload, controller.upload);
+  router.post('/', singleDocumentUpload, controller.upload);
   router.get('/', controller.list);
   router.get('/:id/open', (req, res, next) => controller.access(req, res, next, false));
   router.get('/:id/download', (req, res, next) => controller.access(req, res, next, true));

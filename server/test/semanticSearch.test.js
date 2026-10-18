@@ -17,17 +17,37 @@ function token() {
 }
 
 function query(value) {
-  return { sort: () => ({ lean: async () => value }) };
+  return { lean: async () => value, sort: () => ({ lean: async () => value }) };
+}
+
+function matches(record, filter) {
+  return Object.entries(filter).every(([key, value]) => {
+    if (value === null) return record[key] == null;
+    if (value && typeof value === 'object' && '$in' in value) return value.$in.map(String).includes(String(record[key]));
+    return String(record[key]) === String(value);
+  });
 }
 
 function fakeDocumentModel() {
   const documents = [
-    { _id: 'document-owned', ownerId: 'user_verified', originalName: 'database-revision.pdf', processingStatus: 'ready', folderId: 'study', tags: ['database'] },
-    { _id: 'document-other', ownerId: 'another_user', originalName: 'private.pdf', processingStatus: 'ready', folderId: null, tags: [] },
+    { _id: 'document-owned', ownerId: 'user_verified', originalName: 'database-revision.pdf', processingStatus: 'ready', deletedAt: null, folderId: 'study', tags: ['database'] },
+    { _id: 'document-other', ownerId: 'another_user', originalName: 'private.pdf', processingStatus: 'ready', deletedAt: null, folderId: null, tags: [] },
   ];
   return {
     find(filter) {
-      return query(documents.filter((document) => Object.entries(filter).every(([key, value]) => document[key] === value)));
+      return query(documents.filter((document) => matches(document, filter)));
+    },
+  };
+}
+
+function fakeNoteModel() {
+  const notes = [
+    { _id: 'note-owned', ownerId: 'user_verified', title: 'Database revision', content: 'A B-tree index speeds up repeated database lookups.', folderId: 'study', tags: ['database'], version: 3 },
+    { _id: 'note-other', ownerId: 'another_user', title: 'Private note', content: 'Another account private content.', folderId: null, tags: [] },
+  ];
+  return {
+    find(filter) {
+      return query(notes.filter((note) => matches(note, filter)));
     },
   };
 }
@@ -35,11 +55,21 @@ function fakeDocumentModel() {
 function fakeKnowledgeChunkModel() {
   const chunks = [
     { _id: 'chunk-owned', ownerId: 'user_verified', sourceType: 'document', sourceId: 'document-owned', position: 0, pageNumber: 2, text: 'Indexes make repeated database lookups faster.' },
+    { _id: 'note-chunk-owned', ownerId: 'user_verified', sourceType: 'note', sourceId: 'note-owned', sourceVersion: 3, position: 0, pageNumber: null, text: 'A B-tree index speeds up repeated database lookups.' },
     { _id: 'chunk-other', ownerId: 'another_user', sourceType: 'document', sourceId: 'document-other', position: 0, pageNumber: 1, text: 'Another account private content.' },
   ];
   return {
     find(filter) {
-      return query(chunks.filter((chunk) => Object.entries(filter).every(([key, value]) => chunk[key] === value)));
+      return query(chunks.filter((chunk) => matches(chunk, filter)));
+    },
+    async deleteMany(filter) {
+      for (let index = chunks.length - 1; index >= 0; index -= 1) {
+        if (matches(chunks[index], filter)) chunks.splice(index, 1);
+      }
+    },
+    async insertMany(records) {
+      chunks.push(...records);
+      return records;
     },
   };
 }
@@ -47,31 +77,36 @@ function fakeKnowledgeChunkModel() {
 function fakeStorage() {
   return {
     createAccessUrl() { return 'https://storage.example/private.pdf'; },
+    async uploadDocument() { return { publicId: 'unused' }; },
     async uploadPdf() { return { publicId: 'unused' }; },
     async remove() {},
   };
 }
 
-function fakeSemanticSearchClient() {
+function fakeSemanticSearchClient(results = [{
+  chunkId: 'chunk-owned',
+  sourceType: 'document',
+  sourceId: 'document-owned',
+  title: 'database-revision.pdf',
+  pageNumber: 2,
+  position: 0,
+  text: 'Indexes make repeated database lookups faster.',
+  score: 0.91,
+}]) {
   return {
     indexed: [],
     searches: [],
+    async splitText(text) {
+      return [{ position: 0, pageNumber: 1, text }];
+    },
     async indexChunks(chunks) {
       this.indexed.push(chunks);
       return chunks.length;
     },
+    async deleteSource() {},
     async search(input) {
       this.searches.push(input);
-      return [{
-        chunkId: 'chunk-owned',
-        sourceType: 'document',
-        sourceId: 'document-owned',
-        title: 'database-revision.pdf',
-        pageNumber: 2,
-        position: 0,
-        text: 'Indexes make repeated database lookups faster.',
-        score: 0.91,
-      }];
+      return results;
     },
   };
 }
@@ -82,6 +117,7 @@ async function request(t, path, options = {}, semanticSearchClient = fakeSemanti
     databaseConfigured: true,
     cloudinaryConfigured: true,
     documentModel: fakeDocumentModel(),
+    noteModel: fakeNoteModel(),
     knowledgeChunkModel: fakeKnowledgeChunkModel(),
     documentStorage: fakeStorage(),
     semanticSearchClient,
@@ -96,13 +132,13 @@ async function request(t, path, options = {}, semanticSearchClient = fakeSemanti
   return { response, semanticSearchClient };
 }
 
-test('a verified user indexes only their own ready document chunks', async (t) => {
+test('a verified user indexes only their own ready document and note chunks', async (t) => {
   const client = fakeSemanticSearchClient();
   const { response } = await request(t, '/api/search/reindex', { method: 'POST' }, client);
 
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { indexedCount: 1 });
-  assert.equal(client.indexed[0].length, 1);
+  assert.deepEqual(await response.json(), { indexedCount: 2, documentChunkCount: 1, noteChunkCount: 1 });
+  assert.equal(client.indexed[0].length, 2);
   assert.deepEqual(client.indexed[0][0], {
     chunk_id: 'chunk-owned',
     owner_id: 'user_verified',
@@ -115,6 +151,11 @@ test('a verified user indexes only their own ready document chunks', async (t) =
     folder_id: 'study',
     tags: ['database'],
   });
+  const noteChunk = client.indexed[0][1];
+  assert.equal(noteChunk.owner_id, 'user_verified');
+  assert.equal(noteChunk.source_type, 'note');
+  assert.equal(noteChunk.source_id, 'note-owned');
+  assert.equal(noteChunk.text, 'A B-tree index speeds up repeated database lookups.');
 });
 
 test('semantic search derives the owner from Clerk and applies optional filters', async (t) => {
@@ -140,4 +181,46 @@ test('semantic search rejects an empty query before it reaches the AI service', 
   assert.equal(response.status, 400);
   assert.match((await response.json()).message, /Enter a question/);
   assert.equal(client.searches.length, 0);
+});
+
+test('semantic search removes stale Qdrant results whose source no longer exists', async (t) => {
+  const client = fakeSemanticSearchClient([{
+    chunkId: 'stale-chunk',
+    sourceType: 'document',
+    sourceId: 'deleted-document',
+    title: 'deleted.pdf',
+    pageNumber: 1,
+    position: 0,
+    text: 'Stale vector payload.',
+    score: 0.99,
+  }]);
+  const { response } = await request(t, '/api/search/semantic?query=deleted', {}, client);
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).results, []);
+});
+
+test('semantic search returns a current owned note from MongoDB', async (t) => {
+  const client = fakeSemanticSearchClient([{
+    chunkId: 'note-chunk-owned',
+    sourceType: 'note',
+    sourceId: 'note-owned',
+    title: 'stale vector title',
+    pageNumber: null,
+    position: 0,
+    text: 'stale vector text',
+    score: 0.93,
+  }]);
+  const { response } = await request(t, '/api/search/semantic?query=database&sourceType=note', {}, client);
+
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).results[0], {
+    chunkId: 'note-chunk-owned',
+    sourceType: 'note',
+    sourceId: 'note-owned',
+    title: 'Database revision',
+    pageNumber: null,
+    position: 0,
+    text: 'A B-tree index speeds up repeated database lookups.',
+    score: 0.93,
+  });
 });

@@ -94,7 +94,7 @@ owner ID; Express gets it from the verified session.
 | File | Why it exists |
 | --- | --- |
 | `server/src/services/ragService.js` | Retrieves candidates, rechecks MongoDB ownership, stores chat history, and prepares verified context. |
-| `server/src/services/ragClient.js` | Sends the verified question and chunks from Express to FastAPI. |
+| `server/src/services/aiServiceClient.js` | Sends the verified question and chunks from Express to FastAPI. |
 | `ai-service/app/services/rag_service.py` | Builds the bounded Gemini prompt and generates the answer. |
 | `server/src/models/Conversation.js` | Stores a private conversation heading and timestamps. |
 | `server/src/models/Message.js` | Stores questions, answers, grounded state, and the source references used. |

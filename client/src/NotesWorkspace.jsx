@@ -1,3 +1,4 @@
+import { createApiRequest } from './services/api.js';
 import { useEffect, useMemo, useState } from 'react';
 
 const emptyDraft = { title: '', content: '', folderId: '', tags: [] };
@@ -36,18 +37,7 @@ export default function NotesWorkspace({ getToken }) {
     || JSON.stringify(draft.tags) !== JSON.stringify(selectedNote.tags || [])
   );
 
-  async function request(path, options = {}) {
-    const token = await getToken();
-    if (!token) throw new Error('Your session ended. Please sign in again.');
-    const response = await fetch(path, {
-      ...options,
-      headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers },
-    });
-    if (response.status === 204) return null;
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.message || 'The request could not be completed.');
-    return data;
-  }
+  const request = createApiRequest(getToken);
 
   async function loadNotes(query = '') {
     setStatus({ type: 'loading', message: 'Loading your notes…' });

@@ -87,11 +87,11 @@ enough time to return structured output.
 
 | File | Responsibility |
 | --- | --- |
-| `server/src/services/tagSuggestionService.js` | Loads the owned saved note or extracted PDF text and applies the request limit. |
-| `server/src/controllers/tagController.js` | Converts HTTP requests and errors into JSON responses. |
+| `server/src/services/aiService.js` | Loads the owned saved note or extracted PDF text and applies the request limit. |
+| `server/src/controllers/aiController.js` | Converts HTTP requests and errors into JSON responses. |
 | `server/src/services/documentService.js` | Reads ready extracted text and saves explicitly reviewed document tags. |
 | `server/src/services/aiServiceClient.js` | Sends the internal request from Express to FastAPI. |
-| `ai-service/app/services/tag_service.py` | Prompts Gemini for structured JSON and validates the result. |
+| `ai-service/app/services/study_service.py` | Prompts Gemini for structured JSON and validates the result. |
 | `ai-service/app/schemas.py` | Defines the incoming request and the JSON tag shape. |
 | `client/src/NotesWorkspace.jsx` | Shows suggestions and lets the user add them before saving. |
 | `client/src/DocumentsWorkspace.jsx` | Shows PDF suggestions in an editable tag field and saves them explicitly. |
@@ -119,3 +119,7 @@ temporary Gemini capacity response; retrying later succeeded without changing
 the API key or application code.
 
 [Gemini structured output documentation](https://ai.google.dev/gemini-api/docs/structured-output)
+
+## Code simplification — 17 October 2026
+
+Current paths above reflect shared study-set services/controllers and one structured Gemini service. Each feature keeps its own validation and explicit routes; public API and saved data shapes are unchanged. Earlier verification notes remain historical.

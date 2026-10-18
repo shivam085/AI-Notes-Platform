@@ -10,10 +10,10 @@ const issuer = 'https://notes-test.clerk.accounts.dev';
 const publishableKey = `pk_test_${Buffer.from('notes-test.clerk.accounts.dev$').toString('base64')}`;
 const noteId = '507f1f77bcf86cd799439011';
 
-function token() {
+function token(userId = 'user_verified') {
   const now = Math.floor(Date.now() / 1000);
   const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: 'notes-key' })).toString('base64url');
-  const payload = Buffer.from(JSON.stringify({ iss: issuer, sub: 'user_verified', sid: 'sess_notes', azp: origin, iat: now, nbf: now - 10, exp: now + 300 })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ iss: issuer, sub: userId, sid: `sess_${userId}`, azp: origin, iat: now, nbf: now - 10, exp: now + 300 })).toString('base64url');
   const body = `${header}.${payload}`;
   return `${body}.${sign('RSA-SHA256', Buffer.from(body), privateKey).toString('base64url')}`;
 }
@@ -43,7 +43,7 @@ function fakeNoteModel() {
   };
 }
 
-async function request(t, path, options = {}, noteModel = fakeNoteModel()) {
+async function request(t, path, options = {}, noteModel = fakeNoteModel(), userId = 'user_verified') {
   const app = createApp({
     configured: true,
     databaseConfigured: true,
@@ -52,7 +52,7 @@ async function request(t, path, options = {}, noteModel = fakeNoteModel()) {
   });
   const server = await new Promise((resolve) => { const running = app.listen(0, '127.0.0.1', () => resolve(running)); });
   t.after(() => new Promise((resolve) => server.close(resolve)));
-  return fetch(`http://127.0.0.1:${server.address().port}${path}`, { ...options, headers: { Authorization: `Bearer ${token()}`, Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}) } });
+  return fetch(`http://127.0.0.1:${server.address().port}${path}`, { ...options, headers: { Authorization: `Bearer ${token(userId)}`, Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}) } });
 }
 
 test('note input trims titles and normalizes duplicate tags', () => {
@@ -69,6 +69,17 @@ test('a verified user can create and list only their own note', async (t) => {
   assert.equal(listed.status, 200);
   const data = await listed.json();
   assert.deepEqual(data.notes.map((note) => note.ownerId), ['user_verified']);
+});
+
+test('two verified accounts receive separate note lists', async (t) => {
+  const noteModel = fakeNoteModel();
+  await request(t, '/api/notes', { method: 'POST', body: JSON.stringify({ title: 'My revision', content: 'My private study text.', tags: [] }) }, noteModel, 'user_verified');
+
+  const firstAccount = await request(t, '/api/notes', {}, noteModel, 'user_verified');
+  assert.deepEqual((await firstAccount.json()).notes.map((note) => note.title), ['My revision']);
+
+  const secondAccount = await request(t, '/api/notes', {}, noteModel, 'another_user');
+  assert.deepEqual((await secondAccount.json()).notes.map((note) => note.title), ['Private']);
 });
 
 test('a stale version cannot overwrite a note', async (t) => {

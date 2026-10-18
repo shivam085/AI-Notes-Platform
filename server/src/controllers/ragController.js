@@ -1,7 +1,6 @@
 import { getAuth } from '@clerk/express';
-import { RagConfigurationError, RagUnavailableError } from '../services/ragClient.js';
+import { AiServiceConfigurationError, AiServiceUnavailableError } from '../services/aiServiceClient.js';
 import { RagConversationNotFoundError, RagInputError } from '../services/ragService.js';
-import { SemanticSearchConfigurationError, SemanticSearchUnavailableError } from '../services/semanticSearchClient.js';
 import { SemanticSearchInputError } from '../services/semanticSearchService.js';
 
 function ownerIdFromRequest(req, res) {
@@ -16,8 +15,8 @@ function ownerIdFromRequest(req, res) {
 function respondToError(error, res, next) {
   if (error instanceof RagInputError || error instanceof SemanticSearchInputError) return res.status(400).json({ message: error.message });
   if (error instanceof RagConversationNotFoundError) return res.status(404).json({ message: 'Conversation not found.' });
-  if (error instanceof RagConfigurationError || error instanceof SemanticSearchConfigurationError) return res.status(503).json({ message: error.message });
-  if (error instanceof RagUnavailableError || error instanceof SemanticSearchUnavailableError) return res.status(502).json({ message: error.message });
+  if (error instanceof AiServiceConfigurationError) return res.status(503).json({ message: error.message });
+  if (error instanceof AiServiceUnavailableError) return res.status(502).json({ message: error.message });
   return next(error);
 }
 

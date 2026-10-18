@@ -79,9 +79,9 @@ which keeps decks private even if another account guesses an ID.
 | --- | --- |
 | `client/src/Flashcards.jsx` | Lets users generate, review, save, and study decks. |
 | `server/src/routes/study.routes.js` | Defines the protected REST routes. |
-| `server/src/services/flashcardService.js` | Loads owned notes, validates cards, and saves private decks. |
+| `server/src/services/studyService.js` | Loads owned notes, validates cards, and saves private decks. |
 | `server/src/models/StudySet.js` | Defines the MongoDB shape for a flashcard deck. |
-| `ai-service/app/services/flashcard_service.py` | Prompts Gemini for structured flashcard JSON. |
+| `ai-service/app/services/study_service.py` | Prompts Gemini for structured flashcard JSON. |
 | `ai-service/app/schemas.py` | Defines the request and exact five-card response. |
 
 ## Timeouts and verification
@@ -103,3 +103,7 @@ Verification completed on 13 October 2026:
   configured Gemini service. No saved note or document content was used.
 
 [Gemini structured output documentation](https://ai.google.dev/gemini-api/docs/structured-output)
+
+## Code simplification — 17 October 2026
+
+Current paths above reflect shared study-set services/controllers and one structured Gemini service. Each feature keeps its own validation and explicit routes; public API and saved data shapes are unchanged. Earlier verification notes remain historical.

@@ -1,15 +1,27 @@
-export { createAiServiceClient, AiServiceConfigurationError, AiServiceUnavailableError } from './aiServiceClient.js';
+export {
+  createAiServiceClient,
+  AiServiceConfigurationError,
+  AiServiceUnavailableError,
+  DocumentExtractionInputError,
+} from './aiServiceClient.js';
+export { createAiService, TagSuggestionInputError } from './aiService.js';
 export { createNoteService, NoteInputError, NoteNotFoundError, NoteVersionConflictError } from './noteService.js';
-export { createSummaryService } from './summaryService.js';
-export { createTagSuggestionService, TagSuggestionInputError } from './tagSuggestionService.js';
-export { createFlashcardService, FlashcardInputError, FlashcardSetNotFoundError } from './flashcardService.js';
-export { createQuizService, QuizInputError, QuizSetNotFoundError } from './quizService.js';
-export { createDocumentService, DocumentInputError, DocumentNotFoundError, DocumentProcessingStateError, serializeDocument, serializeDocumentText, validatePdfUpload } from './documentService.js';
+export { createStudyService, StudyInputError, StudySetNotFoundError } from './studyService.js';
+export {
+  createDocumentService,
+  DocumentInputError,
+  DocumentNotFoundError,
+  DocumentProcessingStateError,
+  DocumentProcessingSupersededError,
+  serializeDocument,
+  serializeDocumentText,
+  validateDocumentUpload,
+  validatePdfUpload,
+} from './documentService.js';
 export { createCloudinaryDocumentStorage, DocumentStorageConfigurationError, DocumentStorageError } from './cloudinaryDocumentStorage.js';
 export { createKnowledgeChunkService, KnowledgeChunkInputError } from './knowledgeChunkService.js';
-export { createDocumentExtractionClient, DocumentExtractionConfigurationError, DocumentExtractionInputError, DocumentExtractionUnavailableError } from './documentExtractionClient.js';
 export { createDocumentProcessingService } from './documentProcessingService.js';
-export { createSemanticSearchClient, SemanticSearchConfigurationError, SemanticSearchUnavailableError } from './semanticSearchClient.js';
+export { createDocumentCleanupService } from './documentCleanupService.js';
+export { createDocumentMaintenanceService } from './documentMaintenanceService.js';
 export { createSemanticSearchService, SemanticSearchInputError } from './semanticSearchService.js';
-export { createRagClient, RagConfigurationError, RagUnavailableError } from './ragClient.js';
 export { createRagService, RagConversationNotFoundError, RagInputError } from './ragService.js';

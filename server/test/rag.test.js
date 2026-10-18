@@ -24,6 +24,7 @@ function token() {
 
 function matches(record, filter) {
   return Object.entries(filter).every(([key, value]) => {
+    if (value === null) return record[key] == null;
     if (value && typeof value === 'object' && '$in' in value) return value.$in.map(String).includes(String(record[key]));
     return String(record[key]) === String(value);
   });
@@ -41,7 +42,10 @@ function fakeDocumentModel() {
     { _id: ownedDocumentId, ownerId: 'user_verified', originalName: 'communication.pdf', processingStatus: 'ready' },
     { _id: otherDocumentId, ownerId: 'another_user', originalName: 'private.pdf', processingStatus: 'ready' },
   ];
-  return { find(filter) { return query(documents.filter((document) => matches(document, filter))); } };
+  return {
+    documents,
+    find(filter) { return query(documents.filter((document) => matches(document, filter))); },
+  };
 }
 
 function fakeKnowledgeChunkModel() {
@@ -110,11 +114,11 @@ function fakeRagClient() {
   };
 }
 
-async function request(t, path, options = {}, { searchResults = [], semanticSearchClient = fakeSemanticSearchClient(searchResults), ragClient = fakeRagClient(), conversationModel = fakeConversationModel(), messageModel = fakeMessageModel() } = {}) {
+async function request(t, path, options = {}, { searchResults = [], semanticSearchClient = fakeSemanticSearchClient(searchResults), ragClient = fakeRagClient(), conversationModel = fakeConversationModel(), messageModel = fakeMessageModel(), documentModel = fakeDocumentModel() } = {}) {
   const app = createApp({
     configured: true,
     databaseConfigured: true,
-    documentModel: fakeDocumentModel(),
+    documentModel,
     knowledgeChunkModel: fakeKnowledgeChunkModel(),
     conversationModel,
     messageModel,
@@ -186,4 +190,30 @@ test('conversation history and deletion are scoped to the signed-in owner', asyn
   const removed = await request(t, `/api/ai/conversations/${conversation._id}`, { method: 'DELETE' }, { searchResults, conversationModel, messageModel });
   assert.equal(removed.response.status, 204);
   assert.equal(messageModel.records.length, 0);
+});
+
+test('saved answers hide source links after their document is deleted', async (t) => {
+  const searchResults = [{ chunkId: ownedChunkId, sourceType: 'document', sourceId: ownedDocumentId, score: 0.9 }];
+  const conversationModel = fakeConversationModel();
+  const messageModel = fakeMessageModel();
+  const documentModel = fakeDocumentModel();
+  const created = await request(
+    t,
+    '/api/ai/chat',
+    { method: 'POST', body: JSON.stringify({ question: 'What changed?' }) },
+    { searchResults, conversationModel, messageModel, documentModel },
+  );
+  const conversation = (await created.response.json()).conversation;
+
+  documentModel.documents.splice(0, 1);
+  const history = await request(
+    t,
+    `/api/ai/conversations/${conversation._id}`,
+    {},
+    { searchResults, conversationModel, messageModel, documentModel },
+  );
+  const assistantMessage = (await history.response.json()).messages.find((message) => message.role === 'assistant');
+  assert.equal(assistantMessage.grounded, false);
+  assert.equal(assistantMessage.sourceUnavailable, true);
+  assert.deepEqual(assistantMessage.sources, []);
 });

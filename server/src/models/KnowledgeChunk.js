@@ -4,6 +4,7 @@ const knowledgeChunkSchema = new mongoose.Schema({
   ownerId: { type: String, required: true, immutable: true, index: true },
   sourceType: { type: String, required: true, enum: ['document', 'note'] },
   sourceId: { type: String, required: true },
+  sourceVersion: { type: Number, default: null, min: 0 },
   position: { type: Number, required: true, min: 0 },
   pageNumber: { type: Number, default: null, min: 1 },
   text: { type: String, required: true, trim: true, maxlength: 2_000 },

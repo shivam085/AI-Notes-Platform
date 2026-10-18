@@ -84,9 +84,9 @@ query filters by both owner ID and the `quiz` type.
 | --- | --- |
 | `client/src/Quiz.jsx` | Generates, reviews, saves, takes, and scores quizzes. |
 | `server/src/routes/study.routes.js` | Defines the protected quiz REST routes. |
-| `server/src/services/quizService.js` | Loads owned notes, validates questions, and saves private quizzes. |
+| `server/src/services/studyService.js` | Loads owned notes, validates questions, and saves private quizzes. |
 | `server/src/models/StudySet.js` | Defines the shared MongoDB shape for flashcards and quizzes. |
-| `ai-service/app/services/quiz_service.py` | Prompts Gemini for structured quiz JSON. |
+| `ai-service/app/services/study_service.py` | Prompts Gemini for structured quiz JSON. |
 | `ai-service/app/schemas.py` | Defines the request and five-question response rules. |
 
 ## Verification
@@ -103,3 +103,7 @@ Verification completed on 13 October 2026:
   questions. No saved note or document content was used.
 
 [Gemini structured output documentation](https://ai.google.dev/gemini-api/docs/structured-output)
+
+## Code simplification — 17 October 2026
+
+Current paths above reflect shared study-set services/controllers and one structured Gemini service. Each feature keeps its own validation and explicit routes; public API and saved data shapes are unchanged. Earlier verification notes remain historical.

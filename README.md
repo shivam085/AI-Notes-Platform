@@ -4,28 +4,46 @@ A personal knowledge-management app, built one small phase at a time.
 
 ## Current progress
 
-Phases 1–9 are complete. Editable AI tag suggestions work for saved notes and text-ready PDFs, while private flashcard decks and private quizzes work for saved notes. Clerk sign-in, the backend session check, MongoDB Atlas, private notes, AI summarization, private PDF uploads, page-aware PDF extraction, semantic PDF search, grounded document Q&A, and the Phase 9 study tools are verified. The protected workspace lets each signed-in user create, search, edit, organize, and delete their own notes. The original connection check remains at /connection. Phase 10 is not started.
+Phases 1–9 are complete. Phase 10 is in progress. Local V1 hardening now includes recoverable document processing, bounded extraction retries, deletion-race protection, Cloudinary/MongoDB/Qdrant cleanup, stale-source checks, PDF/DOCX/TXT/Markdown processing, semantic search across notes and documents, a private workspace and clearer loading/error states. Docker, Docker Compose, Nginx, HTTPS, and public deployment remain intentionally deferred.
 
-## Phase 1: connect React to Express
+## Scope simplification — 17 October 2026
 
-This first phase contains a React page and one Express endpoint. Click **Check connection** to send a real request to the backend. The page shows loading, success, or an actionable error, and displays the returned JSON after a successful check.
-
-Phase 2 adds Clerk sign-in. Notes, documents, and AI features will be added in later V1 phases. Sharing and collaborative editing are optional V2 work, only after V1 is complete.
+The app keeps notes with folder/tag fields, private document uploads, processing, semantic search, RAG Q&A, summaries, AI tags, flashcards, quizzes, and Clerk access control. The old connection demo, marketing landing page, and duplicate session-check screens were removed. Health/auth endpoints remain available. Frontend requests, study-set storage/controllers, structured Gemini calls, and internal-service authentication now share focused helpers.
 
 ## Run it locally
 
-You need **Node.js 22.12 or newer** and npm. Development was started with Node 22.23.1 and npm 10.9.8. No database, API keys, or external accounts are required for Phase 1.
+You need **Node.js 22.12 or newer**, npm, and **Python 3.13**. The complete V1 also uses Clerk, MongoDB Atlas, Cloudinary, Gemini, and Qdrant Cloud. Put configuration in the application-specific `.env` files; never commit real keys.
 
-Open a terminal **inside `D:\Projects\Notes_ai`**, then run:
+Open PowerShell inside `D:\Projects\Notes_ai`, then install the JavaScript dependencies:
 
-```sh
-npm install
-npm run dev
+```powershell
+npm.cmd ci
 ```
 
-Open **http://127.0.0.1:5173** in your browser and click **Check connection**.
+Create the Python environment and install the AI dependencies:
 
-`npm run dev` starts both applications. Keep that terminal running while using the app; press **Ctrl+C** to stop it. If PowerShell blocks `npm.ps1`, use `npm.cmd` in place of `npm` without changing your computer's execution policy.
+```powershell
+cd ai-service
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+cd ..
+```
+
+Create these local files from their examples and fill in your own values:
+
+- `client/.env` from `client/.env.example`
+- `server/.env` from `server/.env.example`
+- `ai-service/.env` from `ai-service/.env.example`
+
+The value of `AI_SERVICE_TOKEN` must match in `server/.env` and `ai-service/.env`. Start React, Express, and FastAPI together:
+
+```powershell
+npm.cmd run dev:all
+```
+
+Open **http://127.0.0.1:5173**. Press **Ctrl+C** once in the shared terminal to stop all three services.
+
+`npm run dev` still starts only React and Express, which is useful when you are not testing AI features. If PowerShell blocks `npm.ps1`, use `npm.cmd` without changing the computer's execution policy.
 
 The root package uses **npm workspaces**: one install manages the dependencies in both `client/` and `server/`. Commit the root `package-lock.json` for repeatable installs; a fresh checkout can use `npm ci`.
 
@@ -33,86 +51,80 @@ The root package uses **npm workspaces**: one install manages the dependencies i
 
 | Command | What it does |
 |---|---|
+| `npm run dev:all` | Start React, Express, and FastAPI together. |
 | `npm run dev` | Start React/Vite and Express together. |
 | `npm run dev:client` | Run only the frontend on port 5173. |
 | `npm run dev:server` | Run only Express on port 5000, restarting when server files change. |
+| `npm run dev:ai` | Run only FastAPI on port 8000 with automatic reload. |
 | `npm test` | Run the backend's real HTTP checks with Node's built-in test runner. |
+| `npm run test:ai` | Run the FastAPI and document-loader tests. |
 | `npm run build` | Build the React app into `client/dist/`. |
-| `npm run preview` | View the built frontend on port 4173; run the backend separately for its connection check. |
+| `npm run verify` | Run the Node tests, Python tests, and frontend production build. |
+| `npm run preview` | View the built frontend on port 4173; run the backend separately for API requests. |
 
-The preview command is for local testing, not the final production deployment. Docker and Nginx arrive in Phase 10.
+The preview command is for local testing. Docker and Nginx are deferred and are not part of the current local completion claim.
 
-## Understand what happens when you click
+## Understand the request flow
 
 ```text
-Browser: React button
-    ↓ GET /api/health
-Vite: forwards /api requests to 127.0.0.1:5000
-    ↓
-Express: returns { "status": "ok" }
-    ↓
-React: displays “Backend connected” and the response
+React feature -> shared API helper attaches Clerk token
+  -> Express route -> controller -> service checks source ownership
+  -> MongoDB reads/writes private data
+  -> AI requests: FastAPI checks internal token -> Gemini -> validated result
+  -> React displays the result for review
 ```
 
-- **Frontend:** Code running in the browser. React displays the page and responds to the button click.
-- **Backend:** Code running in Node.js. Express receives the request and decides the response.
-- **Endpoint:** An address and HTTP method your server handles. This endpoint is `GET /api/health`.
-- **JSON:** A text format for structured data. Here the server sends an object with a `status` value.
-- **React state:** Values that change what the page shows, such as `checking`, `connected`, or `error`.
-- **Development proxy:** Vite forwards `/api` requests to Express. The browser uses one origin, so Phase 1 does not need a separate CORS setup.
-
-A green result proves the HTTP connection works. It does not check a database, authentication, or AI service; those do not exist in this phase.
+For RAG, Qdrant first finds similar chunks; Express rechecks their MongoDB owners and content before Gemini receives the context. Upload bytes stay in private Cloudinary storage.
 
 ## Files to read first
 
-```text
-Notes_ai/
-  package.json                # Run commands for the whole project
-  package-lock.json           # Exact installed dependency tree
-  .env.example                # Phase 1 needs no secrets
-  client/
-    index.html                # Browser entry page
-    vite.config.js            # React/Tailwind plugins and /api forwarding
-    src/
-      main.jsx                # Mount React into the HTML page
-      App.jsx                 # Page, button and connection state
-      styles.css              # Tailwind and the visual theme
-      services/api.js         # Fetch the API, validate its reply, handle errors
-  server/
-    src/
-      app.js                  # Express routes
-      server.js               # Listen for connections on port 5000
-    test/
-      health.test.js          # Tests that make actual HTTP requests
-```
+| File/directory | Responsibility |
+| --- | --- |
+| `client/src/Root.jsx` | Clerk, routes, protected workspace and feature panels. |
+| `client/src/services/api.js` | Shared authenticated JSON/multipart requests and response errors. |
+| `server/src/app.js` | Express application configuration. |
+| `server/src/routes/` | Explicit HTTP method/path mappings. |
+| `server/src/controllers/` | HTTP inputs, status codes and error handling. |
+| `server/src/services/` | Ownership, validation and feature logic. |
+| `server/src/models/` | MongoDB schemas. |
+| `ai-service/app/main.py` | FastAPI endpoints and one internal-token dependency. |
+| `ai-service/app/services/study_service.py` | Explicit tag/card/quiz prompts with one validated Gemini call. |
 
 ## Phase 4: AI summarization
 
 The internal Python service now lives in `ai-service/`. It accepts a request only from Express, then calls Gemini to summarize an owned, saved note. Follow [docs/phase-4-setup.md](docs/phase-4-setup.md) to install Python, configure the two local `.env` files, and start FastAPI.
 
-## Phase 5: private PDF uploads
+## Phase 5: private document uploads
 
-The document upload screen accepts PDFs up to 10 MB. Express verifies the signed-in user and validates the file before sending it to Cloudinary private storage. MongoDB stores the owner and file metadata; it does not store the original file. Follow [docs/phase-5-setup.md](docs/phase-5-setup.md) to add the three Cloudinary values to `server/.env` and perform the live check.
+The first verified upload path used PDFs. Phase 10 extends the same private Cloudinary flow to PDF, DOCX, TXT, and Markdown files up to 10 MB. Express verifies the signed-in user and validates the extension, MIME type, and file bytes before uploading. MongoDB stores owner-scoped metadata rather than the original bytes. Follow [docs/phase-5-setup.md](docs/phase-5-setup.md) for Cloudinary configuration.
 
-## Phase 6: readable PDF text
+## Phase 6 and Phase 10: readable document text
 
-After upload, select **Extract text** in the workspace. Express checks that the signed-in user owns the document, then FastAPI downloads a short-lived private Cloudinary link. LangChain's `PyPDFLoader` creates page-level documents, and `RecursiveCharacterTextSplitter` creates small page-aware chunks. MongoDB stores the extracted pages and chunks. The browser lets you inspect the exact text before embeddings and semantic search are added. Follow [docs/phase-6-setup.md](docs/phase-6-setup.md) to refresh the Python environment, run all three services, and verify the flow.
+After upload, select **Extract text**. Express verifies ownership before FastAPI receives a short-lived private Cloudinary link. LangChain uses `PyPDFLoader` for PDF pages, `Docx2txtLoader` for DOCX, and `TextLoader` for TXT/Markdown. `RecursiveCharacterTextSplitter` creates bounded chunks while keeping page or section metadata. MongoDB saves extracted text and chunks. Processing run IDs prevent an older request from restoring deleted content, and interrupted processing is recovered from MongoDB when Express restarts.
 
-## Phase 7: embeddings and semantic PDF search
+## Phase 7 and Phase 10: embeddings and semantic search
 
-Select **Index ready PDFs** to turn each ready PDF chunk into a 768-number Gemini embedding and store it in Qdrant Cloud. Then use **Search by meaning** to retrieve your own related PDF chunks, with their title, page number, match score, and authorized source link. Configure Qdrant Cloud in `ai-service/.env`, then follow [docs/phase-7-setup.md](docs/phase-7-setup.md) for the beginner-friendly setup and verification steps.
+Select **Index notes and documents** to split saved notes with the same LangChain rules as uploaded files, turn all ready chunks into 768-number Gemini embeddings, and store them in Qdrant Cloud. Search can cover both source types or filter to one. Every result is rechecked against the current owned MongoDB note/document and chunk before it reaches the browser, so deleted or older note content is not shown.
 
 ## Phase 8: grounded document Q&A
 
-Use **Ask your documents** to ask a question about ready, indexed PDFs. The app uses RAG: it retrieves a few similar chunks from Qdrant Cloud, verifies those chunks and their documents are still owned by you in MongoDB, then sends only that checked context to Gemini. Each grounded answer includes private PDF/page source cards. Weak or absent evidence returns an honest missing-information response without calling Gemini. Conversations, messages, citations, and deletion are private to the signed-in account. Follow [docs/phase-8-setup.md](docs/phase-8-setup.md) to configure the small RAG limits and verify the feature.
+Use **Ask your documents** to question ready, indexed documents. RAG retrieves related chunks from Qdrant, then Express rechecks the owner, document, and MongoDB chunk before sending focused context to Gemini. Saved answers expose source links only while the owned source still exists. Weak or absent evidence produces an honest missing-information response without calling Gemini.
 
 ## Phase 9: study tools
 
-Select **Suggest tags with AI** on a saved note or a text-ready private PDF to receive 3–5 editable tag ideas. Express loads only the signed-in user's saved source, FastAPI requests structured JSON from Gemini, and both services validate the response. For notes, **Use suggestions** adds ideas to the normal tag field; for PDFs, review or edit the tag field and select **Save tags**. Nothing is stored automatically. Follow [docs/phase-9-auto-tagging.md](docs/phase-9-auto-tagging.md) to understand and test that slice.
+Select **Suggest tags with AI** on a saved note or text-ready private document to receive 3–5 editable tag ideas. Express loads only the signed-in user's saved source, FastAPI requests structured JSON from Gemini, and both services validate the response. Nothing is stored automatically.
 
 Use **Flashcards** to select a saved note, generate exactly five question-and-answer cards, review them, then explicitly save a private deck. Each deck stays scoped to the signed-in account and supports flip, next/previous, shuffle, and deletion. Follow [docs/phase-9-flashcards.md](docs/phase-9-flashcards.md) for the request flow, routes, and verification steps.
 
 Use **Quizzes** to create five multiple-choice questions from a saved note. Review the answer key and explanations before saving a private quiz. When taking a saved quiz, React scores the selected answers locally and reveals the explanations after submission. Follow [docs/phase-9-quizzes.md](docs/phase-9-quizzes.md) for the request flow, routes, and verification steps.
+
+## Phase 10: local V1 hardening
+
+The API stores processing status, a unique run ID, attempt count, and start time with each document. A temporary extraction-service failure gets one bounded retry. If Express restarts during processing, startup recovery claims the saved job with a new run ID. Completion succeeds only for the currently active run.
+
+Deletion first marks a document as deleting, which immediately removes it from lists, access links, AI features, and search rechecks. Cleanup then removes the Cloudinary file, MongoDB chunks, and owner-scoped Qdrant vectors. Incomplete cleanup remains recoverable on the next API start.
+
+See [docs/phase-10-local-hardening.md](docs/phase-10-local-hardening.md) for the flow, files, limitations, and manual checks.
 
 ## API reference
 
@@ -132,24 +144,26 @@ Unknown endpoints return HTTP `404` with:
 { "message": "This endpoint does not exist." }
 ```
 
-The frontend treats non-success responses, invalid JSON, an unexpected status, and a five-second timeout as failures. The button becomes available again so you can retry.
+The shared frontend helper handles JSON errors, non-JSON failures, and empty HTTP 204 responses. Multipart uploads let the browser set its own content-type boundary.
 
-## Verify this phase yourself
+## Verify locally
 
-1. Start the app and open the page. It should say **Ready to check**.
-2. Click **Check connection**. It should say **Backend connected** and display the actual JSON.
-3. To test failure, run the frontend and backend in two separate terminals using `dev:client` and `dev:server`.
-4. Stop only the backend terminal and click the button. It should explain the failure and offer **Try again**.
-5. Restart the backend and retry. The success state should return.
-6. Run `npm test` and `npm run build`.
+1. Start the app, sign in, and save a private note with folder/tag fields.
+2. Upload a document, extract text, and inspect its chunks.
+3. Index notes/documents, search by meaning, and ask a document question with sources.
+4. Generate a note summary and tag suggestions. Review and save flashcards and a quiz.
+5. Check deletion and confirm another account cannot access your sources or study sets.
+6. Run `npm.cmd run verify` for automated regression tests and the production build.
+
+These manual checks require working external-service configuration. Automated tests use injected/mocked providers and do not prove live provider availability.
 
 ## Configuration and troubleshooting
 
 - The API binds to `127.0.0.1:5000`; Vite binds to `127.0.0.1:5173`. These are local development services.
 - If a port is busy, stop the earlier instance you started. Vite deliberately reports a busy port instead of silently picking another one.
 - The API reads an optional `PORT` environment variable. If you change it, update the proxy target in `client/vite.config.js` too.
-- Phase 2 loads client/.env through Vite and server/.env through Node. Phase 3 also requires MONGODB_URI in server/.env. Phase 5 requires CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in server/.env. Phases 4–9 need the existing matching AI_SERVICE_TOKEN in server/.env and ai-service/.env. Phase 9 also uses `AI_SERVICE_TIMEOUT_MS` in server/.env and `GEMINI_REQUEST_TIMEOUT_MS` in ai-service/.env, which keep a slow study-tool request from waiting forever. Phases 7–8 also require `QDRANT_URL` and `QDRANT_API_KEY` in ai-service/.env. Phase 8 optionally uses `RAG_MIN_SIMILARITY_SCORE` in server/.env and the RAG context limits in ai-service/.env. See the per-application .env.example files; never commit real values.
-- When the backend is stopped, a Vite proxy connection error is expected. Restart Express and try the button again.
+- Clerk uses the client publishable key plus the server publishable/secret keys. MongoDB uses `MONGODB_URI`. Cloudinary uses its cloud name, API key, and API secret. Gemini and Qdrant values stay in `ai-service/.env`. The server and AI service share one `AI_SERVICE_TOKEN`. See the per-application `.env.example` files; never commit real values.
+- When the backend is stopped, a Vite proxy connection error is expected. Restart Express and retry the operation.
 - Keep future secrets out of React and Git. `.gitignore` excludes `.env` files, dependencies, and build output.
 
 ## Development and learning log
@@ -157,11 +171,10 @@ The frontend treats non-success responses, invalid JSON, an unexpected status, a
 - [Development Log](https://app.notion.com/p/3e8c1e94c8d181ffa4f0cb43a71caa0f)
 - [Architecture & Concepts](https://app.notion.com/p/3e8c1e94c8d181cda0b3cc006c35018b)
 
-Update the existing phase entry with actual work and checks. Preserve unchanged earlier phases. Phase 9 study tools are complete; Phase 10 finishing, testing, and deployment has not started.
+Update the existing phase entry with actual work and checks. Preserve unchanged earlier phases. Phase 10 local hardening is in progress; container and public deployment work is deferred.
 
 ## Official setup references
 
 - [Vite getting started](https://vite.dev/guide/)
 - [Tailwind's Vite integration](https://tailwindcss.com/docs/installation/using-vite)
 - [Express installation](https://expressjs.com/en/starter/installing/)
-

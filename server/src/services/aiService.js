@@ -1,6 +1,4 @@
-import { AiServiceConfigurationError, AiServiceUnavailableError } from './aiServiceClient.js';
-
-export { AiServiceConfigurationError, AiServiceUnavailableError };
+import { NoteInputError } from './noteService.js';
 
 export class TagSuggestionInputError extends Error {}
 
@@ -21,8 +19,15 @@ function documentText(document) {
   return (document.extractedPages || []).map((page) => page.text?.trim()).filter(Boolean).join('\n\n');
 }
 
-export function createTagSuggestionService({ noteService, documentService, aiClient }) {
+export function createAiService({ noteService, documentService, aiClient }) {
   return {
+    async summarizeNote(ownerId, noteId) {
+      const note = await noteService.getById(ownerId, noteId);
+      const text = note.content.trim();
+      if (!text) throw new NoteInputError('Add some note content before requesting a summary.');
+      return { noteId: note._id.toString(), summary: await aiClient.summarize(text) };
+    },
+
     async suggestTagsForNote(ownerId, noteId) {
       const note = await noteService.getById(ownerId, noteId);
       const text = requireTaggableText(
@@ -41,8 +46,8 @@ export function createTagSuggestionService({ noteService, documentService, aiCli
       const document = await documentService.getExtractedText(ownerId, documentId);
       const text = requireTaggableText(
         documentText(document),
-        'Extract text from this PDF before requesting tag suggestions.',
-        'Keep extracted PDF text to 12,000 characters or fewer before requesting tag suggestions.',
+        'Extract text from this document before requesting tag suggestions.',
+        'Keep extracted document text to 12,000 characters or fewer before requesting tag suggestions.',
       );
 
       return {

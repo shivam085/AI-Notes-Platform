@@ -1,11 +1,12 @@
 import { getAuth } from '@clerk/express';
 import {
-  DocumentExtractionConfigurationError,
+  AiServiceConfigurationError,
   DocumentExtractionInputError,
-  DocumentExtractionUnavailableError,
+  AiServiceUnavailableError,
   DocumentInputError,
   DocumentNotFoundError,
   DocumentProcessingStateError,
+  DocumentProcessingSupersededError,
   serializeDocument,
   serializeDocumentText,
 } from '../services/index.js';
@@ -23,16 +24,18 @@ function ownerIdFromRequest(req, res) {
 function respondToDocumentError(error, res, next) {
   if (error instanceof DocumentInputError) return res.status(400).json({ message: error.message });
   if (error instanceof DocumentNotFoundError) return res.status(404).json({ message: 'Document not found.' });
-  if (error instanceof DocumentProcessingStateError) return res.status(409).json({ message: error.message });
+  if (error instanceof DocumentProcessingStateError || error instanceof DocumentProcessingSupersededError) {
+    return res.status(409).json({ message: error.message });
+  }
   if (error instanceof DocumentExtractionInputError) return res.status(422).json({ message: error.message });
-  if (error instanceof DocumentExtractionConfigurationError) return res.status(503).json({ message: error.message });
-  if (error instanceof DocumentExtractionUnavailableError) return res.status(502).json({ message: error.message });
+  if (error instanceof AiServiceConfigurationError) return res.status(503).json({ message: error.message });
+  if (error instanceof AiServiceUnavailableError) return res.status(502).json({ message: error.message });
   if (error instanceof DocumentStorageConfigurationError) return res.status(503).json({ message: error.message });
   if (error instanceof DocumentStorageError) return res.status(502).json({ message: error.message });
   return next(error);
 }
 
-export function createDocumentsController({ documentService, documentStorage, documentProcessingService, knowledgeChunkService }) {
+export function createDocumentsController({ documentService, documentStorage, documentProcessingService, documentCleanupService }) {
   return {
     async upload(req, res, next) {
       const ownerId = ownerIdFromRequest(req, res);
@@ -42,7 +45,8 @@ export function createDocumentsController({ documentService, documentStorage, do
         const file = req.file;
         // Validate before sending bytes to third-party storage.
         const details = documentService.validateUpload(file);
-        storageAsset = await documentStorage.uploadPdf({ buffer: file.buffer, ownerId, originalName: details.originalName });
+        const uploadDocument = documentStorage.uploadDocument || documentStorage.uploadPdf;
+        storageAsset = await uploadDocument.call(documentStorage, { buffer: file.buffer, ownerId, originalName: details.originalName });
         const document = await documentService.create(ownerId, file, storageAsset, req.body);
         return res.status(201).json({ document: serializeDocument(document) });
       } catch (error) {
@@ -80,11 +84,9 @@ export function createDocumentsController({ documentService, documentStorage, do
       const ownerId = ownerIdFromRequest(req, res);
       if (!ownerId) return;
       try {
-        const document = await documentService.getById(ownerId, req.params.id);
-        await documentStorage.remove(document.cloudinaryPublicId);
-        await knowledgeChunkService.removeDocumentChunks(ownerId, document._id);
-        await documentService.remove(ownerId, req.params.id);
-        return res.status(204).end();
+        const result = await documentCleanupService.deleteDocument(ownerId, req.params.id);
+        if (result.completed) return res.status(204).end();
+        return res.status(202).json({ message: result.message, cleanupPending: true });
       } catch (error) { return respondToDocumentError(error, res, next); }
     },
     async process(req, res, next) {

@@ -11,7 +11,7 @@ class SummarizeResponse(BaseModel):
     summary: str
 
 
-class TagSuggestionRequest(BaseModel):
+class StudyRequest(BaseModel):
     title: str = Field(min_length=1, max_length=140)
     text: str = Field(min_length=1, max_length=12_000)
 
@@ -40,11 +40,6 @@ class TagSuggestionResponse(BaseModel):
         return normalized_tags
 
 
-class FlashcardGenerationRequest(BaseModel):
-    title: str = Field(min_length=1, max_length=140)
-    text: str = Field(min_length=1, max_length=12_000)
-
-
 class Flashcard(BaseModel):
     question: str = Field(min_length=1, max_length=240)
     answer: str = Field(min_length=1, max_length=1_000)
@@ -60,11 +55,6 @@ class Flashcard(BaseModel):
 
 class FlashcardGenerationResponse(BaseModel):
     cards: list[Flashcard] = Field(min_length=5, max_length=5)
-
-
-class QuizGenerationRequest(BaseModel):
-    title: str = Field(min_length=1, max_length=140)
-    text: str = Field(min_length=1, max_length=12_000)
 
 
 class QuizQuestion(BaseModel):
@@ -101,8 +91,13 @@ class QuizGenerationResponse(BaseModel):
     questions: list[QuizQuestion] = Field(min_length=5, max_length=5)
 
 
-class ExtractPdfRequest(BaseModel):
+class ExtractDocumentRequest(BaseModel):
     source_url: str = Field(min_length=1, max_length=4_000)
+    format: Literal["pdf", "docx", "txt", "md"] = "pdf"
+
+
+class SplitTextRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=50_000)
 
 
 class ExtractedPage(BaseModel):
@@ -119,6 +114,19 @@ class ExtractedChunk(BaseModel):
 class ExtractPdfResponse(BaseModel):
     pages: list[ExtractedPage]
     chunks: list[ExtractedChunk]
+
+
+class SplitTextResponse(BaseModel):
+    chunks: list[ExtractedChunk]
+
+
+class DeleteSourceVectorsRequest(BaseModel):
+    owner_id: str = Field(min_length=1, max_length=100)
+    source_id: str = Field(min_length=1, max_length=100)
+
+
+class DeleteSourceVectorsResponse(BaseModel):
+    deleted: bool
 
 
 class EmbedRequest(BaseModel):
