@@ -6,7 +6,7 @@ This is the Phase 10 deployment setup. A working hosted deployment is not confir
 
 Browser → Vercel React app → Vercel `/api` rewrite → Render Express → Render FastAPI → Gemini and Qdrant. Express also connects to MongoDB Atlas, Cloudinary, and Clerk. The browser receives only the Clerk publishable key and session token; database, storage, Gemini, Qdrant, Clerk secret, and internal service tokens belong on the backend.
 
-The repository-root `vercel.mjs` uses `EXPRESS_API_ORIGIN` to route `/api` requests to Express and serves the React app for client routes. Vite's local proxy remains for development. `render.yaml` describes two free web services, sets `HOST=0.0.0.0` for Express, generates the shared AI token, and references the AI service URL and token from Express. Free Render web services are public: the FastAPI internal routes still require the shared token. Use a paid Render private service and private networking if the AI service must be network-private.
+The repository-root `vercel.json` forwards `/api` requests to `https://ai-notes-express.onrender.com/api` with a literal rewrite destination, followed by the `/index.html` fallback for React routes. Vite's local proxy remains for development. `render.yaml` describes two free web services, sets `HOST=0.0.0.0` for Express, generates the shared AI token, and references the AI service URL and token from Express. Free Render web services are public: the FastAPI internal routes still require the shared token. Use a paid Render private service and private networking if the AI service must be network-private.
 
 ## Before starting
 
@@ -28,12 +28,14 @@ The repository-root `vercel.mjs` uses `EXPRESS_API_ORIGIN` to route `/api` reque
 
 ## Vercel
 
-1. Import the same repository and branch into Vercel with the **repository root** as the project root. The checked-in `vercel.mjs` supplies the install, build, output and rewrite settings.
-2. Add `EXPRESS_API_ORIGIN` as the complete HTTPS origin of the Render Express service, for example `https://example.onrender.com` (no path). Add `VITE_CLERK_PUBLISHABLE_KEY` from the same Clerk instance as the Render backend keys.
+1. Import the same repository and branch into Vercel with the **repository root** as the project root. The checked-in `vercel.json` supplies the install, build, output and routing settings.
+2. Add `VITE_CLERK_PUBLISHABLE_KEY` from the same Clerk instance as the Render backend keys. `EXPRESS_API_ORIGIN` is no longer used: the confirmed Express URL is written directly in `vercel.json`. If the backend hostname changes, update that destination and redeploy.
 3. Deploy. After the Vercel origin is known, set the exact origin in Render's `CLERK_AUTHORIZED_PARTIES`, configure Clerk's allowed deployment/origin settings, and redeploy Express. Production Clerk setup requires the user's own domain and matching production keys; follow Clerk's current instructions. Preview deployments have different origins and may need explicit configuration.
 4. Verify `/workspace`, `/sign-in`, and a refresh of each route. Check `/api/health` through the Vercel origin to confirm the external rewrite.
 
-Vercel evaluates `vercel.mjs` at deployment time and requires `EXPRESS_API_ORIGIN`; it intentionally fails configuration when the origin is missing or not HTTPS. Verify the configured external-rewrite timeout and upload limits on the actual plan, particularly for long AI operations and document uploads.
+Set `VITE_CLERK_PUBLISHABLE_KEY` for Production before deploying, and for Preview if you use preview deployments. An old `EXPRESS_API_ORIGIN` variable can be removed or left unused. Verify the external-rewrite timeout and upload limits on the actual plan, particularly for long AI operations and document uploads.
+
+On 18 November 2026 the initial deployment reported `rewrites[0] missing required property destination`. The source `vercel.mjs` did contain a computed destination; the precise platform evaluation failure was not established. It was replaced with static `vercel.json` rewrites using the Express URL confirmed by the user. Keep only this configuration file and deploy the latest commit rather than redeploying the older commit containing `vercel.mjs`.
 
 ## End-to-end smoke check
 
@@ -45,4 +47,4 @@ Free services may take roughly a minute to wake after inactivity; a request can 
 
 Run `npm run verify` from the repository root on Windows after installing dependencies and creating `ai-service/.venv`. This runs Node tests, Python tests, and the frontend production build. For the hosted start commands, run FastAPI with `uvicorn app.main:app --host 127.0.0.1 --port 8000` inside `ai-service`, run `npm run start --workspace server` at the root, and use `npm run preview` for the built frontend. Ensure `server/.env` points to the actual local FastAPI port.
 
-References: [Vercel programmatic configuration](https://vercel.com/docs/project-configuration/vercel-ts), [Render Blueprints](https://render.com/docs/blueprint-spec), [Render free service limits](https://render.com/docs/free), and [Clerk production deployment](https://clerk.com/docs/guides/development/deployment/production).
+References: [Vercel static configuration and rewrites](https://vercel.com/docs/project-configuration/vercel-json#rewrites), [Render Blueprints](https://render.com/docs/blueprint-spec), [Render free service limits](https://render.com/docs/free), and [Clerk production deployment](https://clerk.com/docs/guides/development/deployment/production).
