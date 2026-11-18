@@ -1,6 +1,11 @@
+import logging
+
 from google import genai
+from google.genai import types
 
 from app.config import Settings
+
+logger = logging.getLogger(__name__)
 
 
 class GeminiServiceError(Exception):
@@ -24,12 +29,16 @@ class GeminiSummaryService:
         )
 
         try:
-            client = genai.Client(api_key=self.settings.gemini_api_key)
-            response = client.models.generate_content(
-                model=self.settings.gemini_model,
-                contents=prompt,
-            )
+            with genai.Client(
+                api_key=self.settings.gemini_api_key,
+                http_options=types.HttpOptions(timeout=self.settings.gemini_request_timeout_ms),
+            ) as client:
+                response = client.models.generate_content(
+                    model=self.settings.gemini_model,
+                    contents=prompt,
+                )
         except Exception as error:  # The provider error must not be sent to the browser.
+            logger.error("Gemini summarize failed: %s: %s", type(error).__name__, error)
             raise GeminiServiceError("Gemini could not create a summary.") from error
 
         summary = (response.text or "").strip()

@@ -25,15 +25,18 @@ class GeminiEmbeddingService:
             raise GeminiEmbeddingError("Gemini is not configured yet.")
 
         try:
-            client = genai.Client(api_key=self.settings.gemini_api_key)
-            response = client.models.embed_content(
-                model=self.settings.embedding_model,
-                contents=text,
-                config=types.EmbedContentConfig(
-                    task_type=task_type,
-                    output_dimensionality=self.settings.embedding_dimensions,
-                ),
-            )
+            with genai.Client(
+                api_key=self.settings.gemini_api_key,
+                http_options=types.HttpOptions(timeout=self.settings.gemini_request_timeout_ms),
+            ) as client:
+                response = client.models.embed_content(
+                    model=self.settings.embedding_model,
+                    contents=text,
+                    config=types.EmbedContentConfig(
+                        task_type=task_type,
+                        output_dimensionality=self.settings.embedding_dimensions,
+                    ),
+                )
             embedding = response.embeddings[0].values if response.embeddings else []
         except Exception as error:  # Provider errors must not be returned to the browser.
             raise GeminiEmbeddingError("Gemini could not create an embedding.") from error

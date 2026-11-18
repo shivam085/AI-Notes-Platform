@@ -1,4 +1,5 @@
 from typing import Protocol
+import ssl
 from uuid import NAMESPACE_URL, uuid5
 
 from qdrant_client import QdrantClient, models
@@ -30,7 +31,19 @@ class QdrantVectorStore:
             raise QdrantStoreError(
                 "Qdrant Cloud is not configured. Set QDRANT_URL and QDRANT_API_KEY in ai-service/.env."
             )
-        return QdrantClient(url=self.settings.qdrant_url, api_key=self.settings.qdrant_api_key)
+        connection_options = {}
+        if self.settings.qdrant_force_tls12:
+            # Opt in only where default TLS negotiation is reset by the network.
+            # Keep trusted certificates and hostname verification enabled.
+            context = ssl.create_default_context()
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            context.maximum_version = ssl.TLSVersion.TLSv1_2
+            connection_options["verify"] = context
+        return QdrantClient(
+            url=self.settings.qdrant_url,
+            api_key=self.settings.qdrant_api_key,
+            **connection_options,
+        )
 
     def _get_client(self) -> QdrantClient:
         if self.client is None:

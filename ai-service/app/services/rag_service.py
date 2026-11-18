@@ -1,4 +1,5 @@
 from google import genai
+from google.genai import types
 
 from app.config import Settings
 from app.schemas import RagAnswer, RagContext
@@ -41,11 +42,14 @@ class GeminiRagService:
         )
 
         try:
-            client = genai.Client(api_key=self.settings.gemini_api_key)
-            response = client.models.generate_content(
-                model=self.settings.gemini_model,
-                contents=prompt,
-            )
+            with genai.Client(
+                api_key=self.settings.gemini_api_key,
+                http_options=types.HttpOptions(timeout=self.settings.gemini_request_timeout_ms),
+            ) as client:
+                response = client.models.generate_content(
+                    model=self.settings.gemini_model,
+                    contents=prompt,
+                )
         except Exception as error:  # Provider details must not be returned to the browser.
             raise GeminiRagError("Gemini could not answer the question.") from error
 

@@ -2,9 +2,15 @@
 
 A personal knowledge-management app, built one small phase at a time.
 
+## Detailed feature guides
+
+Read the [feature documentation index](docs/features/README.md) for the existing feature guides. Generation now uses Gemini only; see the configuration guide for current settings.
+
 ## Current progress
 
-Phases 1–9 are complete. Phase 10 is in progress. Local V1 hardening now includes recoverable document processing, bounded extraction retries, deletion-race protection, Cloudinary/MongoDB/Qdrant cleanup, stale-source checks, PDF/DOCX/TXT/Markdown processing, semantic search across notes and documents, a private workspace and clearer loading/error states. Docker, Docker Compose, Nginx, HTTPS, and public deployment remain intentionally deferred.
+Phases 1–9 are complete. Phase 10 is in progress. Local V1 hardening includes recoverable document processing, bounded extraction retries, deletion-race protection, Cloudinary/MongoDB/Qdrant cleanup, stale-source checks, PDF/DOCX/TXT/Markdown processing, semantic search across notes and documents, a private workspace and clearer loading/error states. Vercel and Render deployment configuration is being prepared; deployment is not complete until the hosted application is verified.
+
+For the deployment setup and its limitations, see [Vercel and Render deployment](docs/vercel-render-deployment.md).
 
 ## Scope simplification — 17 October 2026
 

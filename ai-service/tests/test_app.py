@@ -1,8 +1,10 @@
 import unittest
 import json
+import ssl
 from unittest.mock import patch
 from io import BytesIO
 from zipfile import ZipFile
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
@@ -10,9 +12,12 @@ from app.config import Settings
 from app.main import create_app
 from app.services.pdf_extraction_service import DocumentTextExtractor, PdfExtractionResult, PdfTextExtractor
 from app.services.text_chunking import TextChunk, TextPage, split_pages_into_chunks
-from app.schemas import IndexChunk, QuizGenerationResponse, RagAnswer, SemanticSearchRequest, SemanticSearchResult, TagSuggestionResponse
+from app.schemas import IndexChunk, QuizGenerationResponse, RagAnswer, RagContext, SemanticSearchRequest, SemanticSearchResult, TagSuggestionResponse
 from app.services.vector_store import QdrantStoreError, QdrantVectorStore
 from app.services.study_service import GeminiStudyError, GeminiStudyService
+from app.services.gemini_service import GeminiSummaryService
+from app.services.embedding_service import GeminiEmbeddingService
+from app.services.rag_service import GeminiRagService
 from qdrant_client import QdrantClient, models
 
 
@@ -496,6 +501,59 @@ class AiServiceTests(unittest.TestCase):
 
 
 class SharedStudyServiceTests(unittest.TestCase):
+    def test_qdrant_tls12_workaround_preserves_certificate_verification(self):
+        settings = Settings("key", "model", "token", qdrant_url="https://qdrant.example.test", qdrant_api_key="test-key", qdrant_force_tls12=True)
+        with patch("app.services.vector_store.QdrantClient") as factory:
+            QdrantVectorStore(settings)._create_client()
+            context = factory.call_args.kwargs["verify"]
+            self.assertEqual(context.minimum_version, ssl.TLSVersion.TLSv1_2)
+            self.assertEqual(context.maximum_version, ssl.TLSVersion.TLSv1_2)
+            self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+            self.assertTrue(context.check_hostname)
+
+    def test_qdrant_uses_default_tls_unless_explicitly_enabled(self):
+        settings = Settings("key", "model", "token", qdrant_url="https://qdrant.example.test", qdrant_api_key="test-key")
+        with patch("app.services.vector_store.QdrantClient") as factory:
+            QdrantVectorStore(settings)._create_client()
+            self.assertNotIn("verify", factory.call_args.kwargs)
+
+    def test_rag_uses_configured_model_timeout_and_closes_client(self):
+        settings = Settings("test-key", "test-model", "test-token", gemini_request_timeout_ms=12_000)
+        with patch("app.services.rag_service.genai.Client") as factory:
+            client = factory.return_value.__enter__.return_value
+            client.models.generate_content.return_value.text = "Plants use chloroplasts."
+            result = GeminiRagService(settings).answer_question("Where?", [
+                RagContext(chunk_id="chunk", source_id="source", title="Plants", text="Plants use chloroplasts.")
+            ])
+            self.assertTrue(result.grounded)
+            self.assertEqual(factory.call_args.kwargs["http_options"].timeout, 12_000)
+            self.assertEqual(client.models.generate_content.call_args.kwargs["model"], "test-model")
+            factory.return_value.__exit__.assert_called_once()
+
+    def test_embeddings_use_timeout_and_preserve_task_types(self):
+        settings = Settings("test-key", "test-model", "test-token", gemini_request_timeout_ms=12_000, embedding_dimensions=2)
+        with patch("app.services.embedding_service.genai.Client") as factory:
+            client = factory.return_value.__enter__.return_value
+            client.models.embed_content.return_value.embeddings = [SimpleNamespace(values=[0.3, 0.7])]
+            service = GeminiEmbeddingService(settings)
+            for embed, task_type in [(service.embed_document, "RETRIEVAL_DOCUMENT"), (service.embed_query, "RETRIEVAL_QUERY")]:
+                self.assertEqual(embed("Plants"), [0.3, 0.7])
+                self.assertEqual(factory.call_args.kwargs["http_options"].timeout, 12_000)
+                call = client.models.embed_content.call_args.kwargs
+                self.assertEqual(call["model"], settings.embedding_model)
+                self.assertEqual(call["config"].task_type, task_type)
+                self.assertEqual(call["config"].output_dimensionality, 2)
+            self.assertEqual(factory.return_value.__exit__.call_count, 2)
+
+    def test_summary_uses_the_configured_provider_timeout(self):
+        settings = Settings("test-key", "test-model", "test-token", gemini_request_timeout_ms=55_000)
+        service = GeminiSummaryService(settings)
+        with patch("app.services.gemini_service.genai.Client") as factory:
+            client = factory.return_value.__enter__.return_value
+            client.models.generate_content.return_value.text = "- Indexes speed up lookups."
+            self.assertEqual(service.summarize("Indexes speed up repeated lookups."), "- Indexes speed up lookups.")
+            self.assertEqual(factory.call_args.kwargs["http_options"].timeout, 55_000)
+
     def test_each_prompt_uses_its_schema_and_validates_provider_json(self):
         settings = Settings("test-key", "test-model", "test-token")
         service = GeminiStudyService(settings)

@@ -92,9 +92,13 @@ test('merged client retains separate extraction, retrieval and generation timeou
   });
   const client = clientWith(async (url) => Response.json(url.endsWith('extract-document')
     ? { pages: [], chunks: [] }
-    : url.endsWith('answer-question') ? { answer: 'Answer', grounded: false } : { summary: 'Summary' }), { timeoutMs: 9_000 });
+    : url.endsWith('answer-question') ? { answer: 'Answer', grounded: false }
+      : url.endsWith('index-chunks') ? { indexed_count: 1 }
+        : url.endsWith('suggest-tags') ? { tags: ['database', 'indexes', 'revision'] } : { summary: 'Summary' }), { timeoutMs: 9_000 });
   await client.extractDocument('https://files.test/document.pdf');
   await client.answerQuestion('Question', []);
+  await client.indexChunks([{ position: 0, pageNumber: 1, text: 'Document chunk.' }]);
   await client.summarize('Text');
-  assert.deepEqual(timeouts, [30_000, 60_000, 9_000]);
+  await client.suggestTags({ title: 'Indexes', text: 'Reference text.' });
+  assert.deepEqual(timeouts, [30_000, 60_000, 120_000, 60_000, 60_000]);
 });

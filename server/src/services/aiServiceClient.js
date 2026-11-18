@@ -64,7 +64,9 @@ export function createAiServiceClient({
 
     async indexChunks(chunks) {
       const message = 'The AI search service returned an unexpected indexing response.';
-      const data = await post('/internal/index-chunks', { chunks }, message, 60_000);
+      // Each chunk needs a Gemini embedding before Qdrant can store it. A document
+      // can contain many chunks, so indexing needs the longest supported AI timeout.
+      const data = await post('/internal/index-chunks', { chunks }, message, 120_000);
       if (!Number.isInteger(data.indexed_count) || data.indexed_count < 0) throw new AiServiceUnavailableError(message);
       return data.indexed_count;
     },
@@ -94,7 +96,7 @@ export function createAiServiceClient({
     },
 
     async summarize(text) {
-      const data = await post('/internal/summarize', { text }, 'The AI service could not create a summary. Please try again shortly.');
+      const data = await post('/internal/summarize', { text }, 'The AI service could not create a summary. Please try again shortly.', 60_000);
       if (typeof data.summary !== 'string' || !data.summary.trim()) {
         throw new AiServiceUnavailableError('The AI service could not create a summary. Please try again shortly.');
       }
@@ -102,7 +104,7 @@ export function createAiServiceClient({
     },
 
     async suggestTags({ title, text }) {
-      const data = await post('/internal/suggest-tags', { title, text }, 'The AI service could not suggest tags. Please try again shortly.');
+      const data = await post('/internal/suggest-tags', { title, text }, 'The AI service could not suggest tags. Please try again shortly.', 60_000);
       if (!Array.isArray(data.tags) || data.tags.length < 3 || data.tags.length > 5 || data.tags.some((tag) => typeof tag !== 'string' || !tag.trim() || tag.length > 30)) {
         throw new AiServiceUnavailableError('The AI service returned invalid tag suggestions. Please try again shortly.');
       }
@@ -110,7 +112,7 @@ export function createAiServiceClient({
     },
 
     async generateFlashcards({ title, text }) {
-      const data = await post('/internal/generate-flashcards', { title, text }, 'The AI service could not create flashcards. Please try again shortly.');
+      const data = await post('/internal/generate-flashcards', { title, text }, 'The AI service could not create flashcards. Please try again shortly.', 60_000);
       if (!Array.isArray(data.cards) || data.cards.length !== 5) {
         throw new AiServiceUnavailableError('The AI service returned invalid flashcards. Please try again shortly.');
       }
@@ -125,7 +127,7 @@ export function createAiServiceClient({
     },
 
     async generateQuiz({ title, text }) {
-      const data = await post('/internal/generate-quiz', { title, text }, 'The AI service could not create a quiz. Please try again shortly.');
+      const data = await post('/internal/generate-quiz', { title, text }, 'The AI service could not create a quiz. Please try again shortly.', 60_000);
       if (!Array.isArray(data.questions) || data.questions.length !== 5) {
         throw new AiServiceUnavailableError('The AI service returned an invalid quiz. Please try again shortly.');
       }

@@ -249,6 +249,8 @@ React can calculate multiple-choice and true/false scores. For short answers, sh
 
 **In progress — started 14 October 2026:** Reliability, safe cleanup, remaining document formats, interface completion, regression tests, and final local setup documentation are active. Docker, Docker Compose, Nginx, HTTPS, and public deployment configuration are deferred at the user's request; Phase 10 will remain In Progress until that deployment work is resumed and verified.
 
+**Deployment resumed — 18 November 2026:** The user chose Vercel for the frontend and Render for the Express and FastAPI services. This hosted approach replaces the earlier deferred Nginx/Docker deployment path for the current deployment attempt; hosted verification is still required before Phase 10 can be completed.
+
 Complete these in separate small tasks:
 
 - [x] **Recover processing work:** Store pending work in MongoDB so a restart does not lose it. Add bounded retries, status polling, and checks that an older job cannot replace newer content. Use the existing FastAPI service; no new queue infrastructure is needed.

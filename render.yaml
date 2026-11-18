@@ -1,0 +1,65 @@
+services:
+  - type: web
+    name: ai-notes-python
+    runtime: python
+    plan: free
+    rootDir: ai-service
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        sync: false
+      - key: GEMINI_EMBEDDING_MODEL
+        value: gemini-embedding-001
+      - key: GEMINI_EMBEDDING_DIMENSIONS
+        value: "768"
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: QDRANT_COLLECTION
+        value: ai_notes_chunks
+      - key: AI_SERVICE_TOKEN
+        generateValue: true
+
+  - type: web
+    name: ai-notes-express
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm run start --workspace server
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.14.0
+      - key: HOST
+        value: 0.0.0.0
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_AUTHORIZED_PARTIES
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: AI_SERVICE_URL
+        fromService:
+          type: web
+          name: ai-notes-python
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: AI_SERVICE_TOKEN
+        fromService:
+          type: web
+          name: ai-notes-python
+          envVarKey: AI_SERVICE_TOKEN
